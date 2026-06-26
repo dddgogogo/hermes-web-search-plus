@@ -202,7 +202,7 @@ class ExtractPlusCoreTests(unittest.TestCase):
         mock_linkup.assert_called_once()
 
     def test_extract_provider_priority_prefers_fast_clean_extractors(self):
-        self.assertEqual(search.EXTRACT_PROVIDER_PRIORITY, ["tavily", "exa", "linkup", "parallel", "firecrawl", "you"])
+        self.assertEqual(search.EXTRACT_PROVIDER_PRIORITY, ["tavily", "exa", "linkup", "parallel", "firecrawl", "you", "keenable"])
 
     def test_extract_plus_auto_prefers_tavily_over_exa(self):
         with mock.patch.dict(os.environ, {"EXA_API_KEY": "exa-test", "TAVILY_API_KEY": "tvly-test"}, clear=True):
@@ -416,6 +416,18 @@ class ExtractPlusPluginTests(unittest.TestCase):
         registered.clear()
         with mock.patch.dict(os.environ, {"FIRECRAWL_API_KEY": "fc-test"}, clear=True):
             plugin.register(Ctx())
+            self.assertTrue(registered["web_extract_plus"]["check_fn"]())
+
+    def test_web_extract_plus_opt_in_enables_keyless_keenable(self):
+        registered = {}
+
+        class Ctx:
+            def register_tool(self, **kwargs):
+                registered[kwargs["name"]] = kwargs
+
+        with mock.patch.dict(os.environ, {"KEENABLE_ALLOW_PUBLIC": "1"}, clear=True):
+            plugin.register(Ctx())
+            self.assertTrue(registered["web_search_plus"]["check_fn"]())
             self.assertTrue(registered["web_extract_plus"]["check_fn"]())
 
 

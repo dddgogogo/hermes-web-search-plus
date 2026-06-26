@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
-from config import get_api_key, load_config
+from config import get_api_key, keyless_public_allowed, load_config
 from provider_health import (
     execute_provider_with_retry,
     mark_provider_failure,
@@ -12,6 +12,7 @@ from provider_health import (
 from providers import (
     extract_exa,
     extract_firecrawl,
+    extract_keenable,
     extract_linkup,
     extract_parallel,
     extract_tavily,
@@ -56,7 +57,8 @@ def extract_plus(
             errors.append({"provider": prov, "error": f"Provider {prov} does not support extraction"})
             continue
         key = get_api_key(prov, config)
-        if not key:
+        keyless_allowed = keyless_public_allowed(prov, config)
+        if not key and not keyless_allowed:
             errors.append({"provider": prov, "error": "missing_api_key"})
             continue
         in_cooldown, remaining = provider_in_cooldown(prov)
@@ -87,6 +89,9 @@ def extract_plus(
                         max_chars_total=int(parallel.get("max_chars_total", 12000)),
                         max_chars_per_result=int(parallel.get("max_chars_per_result", 6000)),
                     )
+                if prov == "keenable":
+                    kn = config.get("keenable", {})
+                    return extract_keenable(urls, key, output_format, include_images, include_raw_html, render_js, public=keyless_allowed, api_url=kn.get("fetch_url", "https://api.keenable.ai/v1/fetch"), timeout=int(kn.get("timeout", 30)))
                 you = config.get("you", {})
                 return extract_you(urls, key, output_format, include_images, include_raw_html, render_js, api_url=you.get("contents_url", "https://ydc-index.io/v1/contents"), timeout=int(you.get("timeout", 30)))
 
