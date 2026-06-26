@@ -164,12 +164,12 @@ def _get_plugin_config_path() -> Path:
     return Path(__file__).parent.parent / "config.json"
 
 
-def _keyless_public_opted_in(provider: str) -> bool:
+def _keyless_public_opted_in(provider: str, config_path: Optional[Path] = None) -> bool:
     """Registration-path mirror of config.keyless_public_allowed (env var or config.json, default off)."""
     if is_truthy(os.environ.get(keyless_public_env_var(provider))):
         return True
     try:
-        config_path = _get_plugin_config_path()
+        config_path = config_path or _get_plugin_config_path()
         if config_path.exists():
             with open(config_path) as f:
                 section = json.load(f).get(PROVIDER_SPECS[provider].config_section, {})
@@ -339,7 +339,20 @@ def _atomic_write_json(path: Path, data: Mapping[str, Any]) -> None:
 
 
 def _write_behavior_config(path: Path, data: Mapping[str, Any], *, dry_run: bool = False, backup: bool = False) -> None:
-    rendered = json.dumps(data, indent=2, sort_keys=True) + "\n"
+    merged: Dict[str, Any] = {}
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text() or "{}")
+            if isinstance(existing, Mapping):
+                merged = dict(existing)
+        except (json.JSONDecodeError, OSError):
+            merged = {}
+    for key, value in data.items():
+        if isinstance(value, Mapping) and isinstance(merged.get(key), Mapping):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    rendered = json.dumps(merged, indent=2, sort_keys=True) + "\n"
     if dry_run:
         print(rendered, end="")
         return
@@ -347,7 +360,7 @@ def _write_behavior_config(path: Path, data: Mapping[str, Any], *, dry_run: bool
         backup_path = _unique_timestamped_path(path, "bak")
         shutil.copy2(path, backup_path)
         print(f"Backup written: {backup_path}")
-    _atomic_write_json(path, data)
+    _atomic_write_json(path, merged)
 
 
 def _routing_summary(config: Mapping[str, Any]) -> str:
@@ -585,6 +598,7 @@ def _web_search_plus_cli_setup(parser: argparse.ArgumentParser) -> None:
     setup.add_argument("--env-path", help="Override Hermes .env path")
     setup.add_argument("--config-path", help="Override web-search-plus config.json path")
     setup.add_argument("--show-values", action="store_true", help="Use visible input instead of hidden secret prompts")
+    setup.add_argument("--keyless-public", action="store_true", help="Opt into the keyless public tier (no API key) for any keyless provider, skipping its confirmation prompt")
     setup.add_argument("--dry-run", action="store_true", help="Show the setup/routing plan without writing files")
     setup.add_argument("--routing", choices=["auto", "fixed"], help="Persist routing mode after key setup")
     setup.add_argument("--default-provider", help="Provider to use when routing is fixed/off")
@@ -779,7 +793,8 @@ def _web_search_plus_cli_command(args: Any) -> None:
         for item in catalog:
             rec = " recommended" if item.get("recommended") else ""
             caps = ", ".join(item.get("capabilities", []))
-            print(f"  • {item['display_name']} ({item['provider']}) — {item['env']} — {caps}{rec}")
+            keyless = " — keyless public tier available (no key needed)" if item["provider"] in _KEYLESS_PROVIDER_IDS else ""
+            print(f"  • {item['display_name']} ({item['provider']}) — {item['env']} — {caps}{rec}{keyless}")
             print(f"    {item['signup_url']}")
         print(f"\nTarget env file: {env_path}")
         print(f"Target config file: {config_path}")
@@ -788,7 +803,9 @@ def _web_search_plus_cli_command(args: Any) -> None:
             print("Dry run only; no keys or routing config written.")
             return
 
+        force_keyless = getattr(args, "keyless_public", False)
         values: Dict[str, str] = {}
+        keyless_enable: List[str] = []
         for item in catalog:
             if getattr(args, "open", False):
                 webbrowser.open(item["signup_url"])
@@ -802,6 +819,20 @@ def _web_search_plus_cli_command(args: Any) -> None:
                 value = ""
             if value:
                 values[item["env"]] = value
+                continue
+            if item["provider"] not in _KEYLESS_PROVIDER_IDS or _keyless_public_opted_in(item["provider"], config_path):
+                continue
+            if force_keyless:
+                answer = "y"
+            else:
+                try:
+                    answer = input(f"  Use {item['display_name']} keyless public search (no API key)? [y/N, Enter to skip]: ").strip().lower()
+                except (EOFError, OSError):
+                    answer = ""
+            if answer in ("y", "yes"):
+                keyless_enable.append(item["provider"])
+        for provider in keyless_enable:
+            config.setdefault(PROVIDER_SPECS[provider].config_section, {})["allow_public"] = True
         routing_args_present = any(
             getattr(args, name, None) is not None
             for name in ["routing", "default_provider", "provider_priority", "disable_providers", "fallback_provider", "confidence_threshold"]
@@ -813,9 +844,13 @@ def _web_search_plus_cli_command(args: Any) -> None:
             print(f"\n✓ Configured {len(changed)} provider key(s) in {env_path}: " + ", ".join(changed))
             print("✓ Secrets were not printed.")
             wrote_any = True
-        if routing_args_present:
+        if routing_args_present or keyless_enable:
             _write_behavior_config(config_path, config)
-            print(f"✓ Saved routing preferences in {config_path}")
+            if routing_args_present:
+                print(f"✓ Saved routing preferences in {config_path}")
+            if keyless_enable:
+                names = ", ".join(PROVIDER_SPECS[p].display_name for p in keyless_enable)
+                print(f"✓ Enabled keyless public search for {names} in {config_path}")
             wrote_any = True
         if not wrote_any:
             print("No keys entered; nothing changed.")
