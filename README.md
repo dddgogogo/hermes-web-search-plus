@@ -2,7 +2,7 @@
 
 
 <p align="center">
-  <img src="docs/assets/web-search-plus-v270-hero.png" alt="Hermes web-search-plus v2.7.0 hero: two-tool surface, adaptive Routing v2, private extract-target guard, fast-path doctor, and 14 search / 7 extraction providers" width="100%">
+  <img src="docs/assets/web-search-plus-v261-hero.png" alt="Hermes web-search-plus hero: two-tool surface, adaptive Routing v2, research mode, quality diagnostics, and 14 search / 7 extraction providers" width="100%">
 </p>
 
 <p align="center">
