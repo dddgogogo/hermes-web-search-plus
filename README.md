@@ -11,7 +11,7 @@
   <img alt="Hermes Plugin" src="https://img.shields.io/badge/Hermes-plugin-a78bfa.svg">
 </p>
 
-**Web search and URL extraction for Hermes — Routing v2 across 14 search providers and 7 extraction-capable providers, with private extract-target guards, keyless-provider onboarding, and a fast-path doctor for public Hermes installs.** `web_extract_plus(provider="auto")` defaults to Tavily-first extraction for fast, reliable fetches; Exa, Linkup, Firecrawl, Parallel, and You.com remain fallback paths when available.
+**Web Search Plus is the operator-grade web layer for Hermes: one search tool, one extraction tool, many providers, conservative routing, safe large-page handling, freshness controls, and provider benchmarking without locking you into a single API.** Routing v2 spans 14 search providers and 7 extraction-capable providers; `web_extract_plus(provider="auto")` defaults to Tavily-first extraction for fast, reliable fetches, with Exa, Linkup, Firecrawl, Parallel, and You.com as fallback paths when available.
 
 `web-search-plus` adds two Hermes tools:
 
@@ -24,12 +24,15 @@
 
 ## Why this exists
 
-Most web-search tools fail in one of two boring ways: they hard-code a single provider, or they pretend every user has every API key. This plugin is capability-based instead:
+Most web-search tools fail in one of two boring ways: they hard-code a single provider, or they pretend every user has every API key. Web Search Plus is capability-based instead: it lets Hermes search, extract, compare, and recover across the providers you actually configured.
 
 - **No global required key.** Configure one search-capable provider and search works.
 - **Extraction is additive.** Add Linkup, Firecrawl, Tavily, Exa, Parallel, or You.com for URL extraction.
 - **Routing v2 is conservative.** You.com, Serper, Exa, Firecrawl, Tavily, and Linkup form the default search pool; Brave, SerpBase, Querit, Parallel, and Perplexity/Kilo stay explicit/guarded unless opted in.
-- **Costs stay bounded.** Research mode caps provider work and keeps partial results when extraction fails. Extraction target URLs are guarded before provider dispatch so local/private networks are not fetched by accident.
+- **Large pages stay usable.** Long extracts return a compact head/tail preview plus a `read_file` footer for the full cleaned text, instead of dumping token bombs into the agent context.
+- **Freshness is explicit.** Ask for day/week/month/year recency once; providers that support native date filters receive the right value, and unsupported providers report that freshness was not applied.
+- **Provider quality is measurable.** The built-in bench command compares configured providers on success rate, latency, result volume, URL diversity, and snippet coverage, then suggests a provider-priority order without writing config automatically.
+- **Costs and safety stay bounded.** Research mode caps provider work and keeps partial results when extraction fails. Extraction target URLs are guarded before provider dispatch so local/private networks are not fetched by accident.
 
 ---
 

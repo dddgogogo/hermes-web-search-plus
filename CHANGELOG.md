@@ -2,12 +2,29 @@
 
 ## [Unreleased]
 
+### Credits
+- #65 by @robbyczgw-cla — truncate-and-store handling for large `web_extract_plus` pages.
+- #66 by @robbyczgw-cla — provider/decode/read-timeout error classification.
+- #67 by @robbyczgw-cla — `.env` and cache permission hardening plus tighter CI workflow defaults.
+- #68 by @robbyczgw-cla — look-alike domain boost hardening.
+- #69 by @robbyczgw-cla — generated provider reference and drift check.
+- #70 by @robbyczgw-cla — generated Routing v2 reference and drift check.
+- #71 by @robbyczgw-cla — unified `freshness` parameter for `web_search_plus`.
+- #72 by @robbyczgw-cla — provider bench and `provider_priority` recommendation command.
+
 ### ✨ Added
-- `web_extract_plus` now uses truncate-and-store output handling for large extracted pages: short pages are returned in full, while long pages return a head/tail window plus a page-on-demand footer pointing to the full cleaned text stored under `cache/web`. Configure the inline budget with `web.extract_char_limit` (default `15000`).
-- Added a provider bakeoff command — `python3 search.py --bench` (or `search.py bench` / `setup.py bench`) — that runs a small fixed query suite (docs, vendor release, community, non-English) against every configured search provider in-process and reports success rate, median latency, result volume, and quality signals (duplicate-free URLs, snippet coverage). It prints a ranked `auto_routing.provider_priority` recommendation with the exact `config set-priority` command to apply it; config is never written automatically, and bench traffic never triggers provider cooldowns or feeds adaptive routing stats.
+- `web_extract_plus` now uses truncate-and-store output handling for large extracted pages: short pages are returned in full, while long pages return a head/tail window plus a page-on-demand footer pointing to the full cleaned text stored under `cache/web`. Configure the inline budget with `web.extract_char_limit` (default `15000`). (#65)
+- Added a unified `freshness` parameter to `web_search_plus` (`day`, `week`, `month`, `year`). Providers with native date filters receive the mapped value; providers without support transparently report that freshness was not applied instead of pretending recency was enforced. (#71)
+- Added a provider bakeoff command — `python3 search.py --bench` (or `search.py bench` / `setup.py bench`) — that runs a small fixed query suite (docs, vendor release, community, non-English) against every configured search provider in-process and reports success rate, median latency, result volume, and quality signals (duplicate-free URLs, snippet coverage). It prints a ranked `auto_routing.provider_priority` recommendation with the exact `config set-priority` command to apply it; config is never written automatically, and bench traffic never triggers provider cooldowns or feeds adaptive routing stats. (#72)
+- Added generated Provider and Routing v2 reference docs, plus drift checks so the public docs stay aligned with the provider registry and routing configuration. (#69, #70)
+
+### 🛡️ Security
+- Domain boost matching now avoids granting authority boosts to look-alike domains that merely contain a trusted domain string (for example `example.com.evil.test`). (#68)
+- Setup-created `.env` files are written with `0600` permissions, cache directories are created with `0700`, and the CI workflow uses tighter token permissions/concurrency defaults. (#67)
 
 ### 🔧 Improved
-- Inline base64 image data in extracted Markdown is replaced with `[IMAGE: alt]` placeholders before measuring/storing content, preventing data-URI token bombs while preserving normal `http(s)` image links.
+- Inline base64 image data in extracted Markdown is replaced with `[IMAGE: alt]` placeholders before measuring/storing content, preventing data-URI token bombs while preserving normal `http(s)` image links. (#65)
+- Provider decode failures and Python 3.8/3.9 read-timeout behavior are classified as provider errors, improving retry/fallback behavior and error clarity. (#66)
 
 ## [v2.7.0] — 2026-06-30
 
