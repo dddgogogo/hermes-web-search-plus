@@ -1165,6 +1165,7 @@ def _run_search(
     count: int = 5,
     exa_depth: str = "normal",
     time_range: Optional[str] = None,
+    freshness: Optional[str] = None,
     include_domains: Optional[List[str]] = None,
     exclude_domains: Optional[List[str]] = None,
     mode: str = "normal",
@@ -1185,7 +1186,7 @@ def _run_search(
     if search is None:
         return _run_search_subprocess(
             query=query, provider=provider, count=count, exa_depth=exa_depth,
-            time_range=time_range, include_domains=include_domains,
+            time_range=time_range, freshness=freshness, include_domains=include_domains,
             exclude_domains=exclude_domains, mode=mode, quality_report=quality_report,
             research_time_budget=research_time_budget, language=language, country=country,
             subprocess_timeout=timeout,
@@ -1194,7 +1195,7 @@ def _run_search(
     def call() -> dict:
         return search.run_search_request(
             query=query, provider=provider, count=count, exa_depth=exa_depth,
-            time_range=time_range, include_domains=include_domains,
+            time_range=time_range, freshness=freshness, include_domains=include_domains,
             exclude_domains=exclude_domains, mode=mode, quality_report=quality_report,
             research_time_budget=research_time_budget, language=language, country=country,
         )
@@ -1213,6 +1214,7 @@ def _run_search_subprocess(
     count: int = 5,
     exa_depth: str = "normal",
     time_range: Optional[str] = None,
+    freshness: Optional[str] = None,
     include_domains: Optional[List[str]] = None,
     exclude_domains: Optional[List[str]] = None,
     mode: str = "normal",
@@ -1235,6 +1237,8 @@ def _run_search_subprocess(
         cmd += ["--exa-depth", exa_depth]
     if time_range and time_range != "none":
         cmd += ["--time-range", time_range]
+    if freshness:
+        cmd += ["--freshness", str(freshness)]
     if include_domains:
         cmd += ["--include-domains"] + include_domains
     if exclude_domains:
@@ -1371,6 +1375,21 @@ def _format_results(data: dict) -> str:
         lines.append(f"[Provider: {provider} | auto-routed | {confidence} confidence | {reason}]")
     else:
         lines.append(f"[Provider: {provider}{' | cached' if cached else ''}]")
+
+    freshness_meta = (data.get("metadata") or {}).get("freshness")
+    if isinstance(freshness_meta, dict) and freshness_meta.get("requested"):
+        per_provider = freshness_meta.get("providers")
+        if isinstance(per_provider, list):
+            applied = [m.get("provider") for m in per_provider if m.get("applied")]
+            skipped = [m.get("provider") for m in per_provider if not m.get("applied")]
+            detail = "applied by: " + (", ".join(str(p) for p in applied) or "none")
+            if skipped:
+                detail += " | not supported: " + ", ".join(str(p) for p in skipped)
+        elif freshness_meta.get("applied"):
+            detail = "applied"
+        else:
+            detail = f"not applied — {freshness_meta.get('reason', 'unsupported provider')}"
+        lines.append(f"[Freshness: {freshness_meta['requested']} | {detail}]")
 
     if answer:
         lines.append(f"\nAnswer: {answer}\n")
@@ -1559,6 +1578,16 @@ def register(ctx: Any) -> None:
                     "enum": ["day", "week", "month", "year"],
                     "description": "Filter results by recency. Optional.",
                 },
+                "freshness": {
+                    "type": "string",
+                    "enum": ["day", "week", "month", "year"],
+                    "description": (
+                        "Unified recency filter (case-insensitive). Applied natively by serper, brave, "
+                        "querit, firecrawl, keenable, you, perplexity, kilo-perplexity, and searxng; "
+                        "providers without recency support (tavily, exa, linkup, parallel, serpbase) still "
+                        "run the search and report freshness.applied=false in result metadata. Optional."
+                    ),
+                },
                 "include_domains": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -1593,7 +1622,8 @@ def register(ctx: Any) -> None:
     }
 
     def handler(args_or_query, provider: str = "auto", count: int = 5, depth: str = "normal",
-                time_range: Optional[str] = None, include_domains: Optional[List[str]] = None,
+                time_range: Optional[str] = None, freshness: Optional[str] = None,
+                include_domains: Optional[List[str]] = None,
                 exclude_domains: Optional[List[str]] = None, mode: str = "normal",
                 quality_report: bool = False, research_time_budget: float = 55.0, **kwargs) -> str:
         # Hermes registry passes the entire input dict as first positional arg
@@ -1603,6 +1633,7 @@ def register(ctx: Any) -> None:
             count = args_or_query.get("count", count)
             depth = args_or_query.get("depth", depth)
             time_range = args_or_query.get("time_range", time_range)
+            freshness = args_or_query.get("freshness", freshness)
             include_domains = args_or_query.get("include_domains", include_domains)
             exclude_domains = args_or_query.get("exclude_domains", exclude_domains)
             mode = args_or_query.get("mode", mode)
@@ -1616,6 +1647,7 @@ def register(ctx: Any) -> None:
             count=count,
             exa_depth=depth,
             time_range=time_range,
+            freshness=freshness,
             include_domains=include_domains,
             exclude_domains=exclude_domains,
             mode=mode,
