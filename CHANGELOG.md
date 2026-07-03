@@ -3,13 +3,19 @@
 ## [v2.9.0] — 2026-07-03
 
 ### Credits
+- #77 by @robbyczgw-cla — golden snapshot recorder and expanded snapshot suite.
+- #79 by @robbyczgw-cla — registry-driven provider dispatch (separates routing from provider execution).
 - #80 by @robbyczgw-cla — Serper news endpoint and webpage scraper extraction.
 - #81 by @robbyczgw-cla — configurable search locale defaults with lightweight query language detection.
 
 ### ✨ Added
+- Golden snapshot evaluation recorder and expanded snapshot suite: record golden snapshots for regression testing, with expanded query coverage across providers. See `scripts/golden_eval.py`. (#77)
 - Added a unified `search_type` parameter to `web_search_plus` (`search` or `news`). Serper serves the news vertical natively via `google.serper.dev/news` (the unified `freshness` filter keeps working there); all other providers run their normal search and report `search_type.applied=false` in result metadata, mirroring the `freshness` contract. CLI: `--search-type`.
 - Serper is now an extraction provider: `web_extract_plus(provider="serper")` scrapes pages via Serper's webpage scraper (`https://scrape.serper.dev`, markdown preferred, per-URL error items). It joins the auto-extraction fallback chain in last position — Tavily-first ordering is unchanged. The endpoint is operator-overridable via config `serper.scrape_url` (with `serper.extract_timeout`).
 - Configurable search locale defaults with lightweight query language detection. A new `defaults.locale` config section (`country`: ISO 3166-1 alpha-2, `language`: ISO 639-1 or `"auto"`) replaces the hardcoded us/en provider defaults for Serper, Brave, You.com, SerpBase, Querit, Firecrawl, and SearXNG. Resolution is config-first for the region and query-aware for the language: CLI/tool flags > explicit provider config > explicit location hint in the query (curated city/country table, e.g. "mejores restaurantes Madrid" → `es`) > `defaults.locale` > us/en fallback. With `language: "auto"`, a conservative stdlib stopword/character heuristic infers `de`, `es`, `fr`, `it`, `pt`, `nl`, or `en` (at least two distinct signals with a single unambiguous winner; terse technical queries like "PostgreSQL 17 release notes" keep the default). Query language never implies the country — a German query may come from Austria or Switzerland, so only explicit location hints move the region. Result metadata reports the resolved locale and per-value source (`config|hint|cli|fallback` / `config|inferred|cli|fallback`). Without `defaults.locale` and flags, behavior stays exactly us/en.
+
+### 🔧 Improved
+- Registry-driven provider dispatch: separates routing from provider execution. Provider-specific search/extract logic lives in `provider_dispatch.py` instead of being scattered through `routing.py`. (#79)
 
 ### 🐛 Fixed
 - `serper.type = "news"` (and the new `search_type="news"`) no longer returns silently empty results: Serper `/news` answers carry results under `news` instead of `organic`, and the parser now reads the right field, including `date`, `source`, thumbnail, and position metadata.
