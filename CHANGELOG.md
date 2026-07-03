@@ -3,6 +3,7 @@
 ## [v2.9.0] — 2026-07-03
 
 ### Credits
+- #75 by @robbyczgw-cla — cwd-independent plugin import fix for Hermes standalone discovery.
 - #77 by @robbyczgw-cla — golden snapshot recorder and expanded snapshot suite.
 - #79 by @robbyczgw-cla — registry-driven provider dispatch (separates routing from provider execution).
 - #80 by @robbyczgw-cla — Serper news endpoint and webpage scraper extraction.
@@ -18,6 +19,7 @@
 - Registry-driven provider dispatch: separates routing from provider execution. Provider-specific search/extract logic lives in `provider_dispatch.py` instead of being scattered through `routing.py`. (#79)
 
 ### 🐛 Fixed
+- Plugin discovery no longer depends on the current working directory when Hermes loads the flat plugin from outside the plugin directory. (#75)
 - `serper.type = "news"` (and the new `search_type="news"`) no longer returns silently empty results: Serper `/news` answers carry results under `news` instead of `organic`, and the parser now reads the right field, including `date`, `source`, thumbnail, and position metadata.
 
 ## [Unreleased]
