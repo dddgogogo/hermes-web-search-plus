@@ -33,6 +33,9 @@ Most web-search tools fail in one of two boring ways: they hard-code a single pr
 - **Freshness is explicit.** Ask for day/week/month/year recency once; providers that support native date filters receive the right value, and unsupported providers report that freshness was not applied.
 - **Provider quality is measurable.** The built-in bench command compares configured providers on success rate, latency, result volume, URL diversity, and snippet coverage, then suggests a provider-priority order without writing config automatically.
 - **Costs and safety stay bounded.** Research mode caps provider work and keeps partial results when extraction fails. Extraction target URLs are guarded before provider dispatch so local/private networks are not fetched by accident.
+- **Locale-aware out of the box.** Set `country`/`language` defaults, or use `language: "auto"` for query-language detection (de/es/fr/it/pt/nl/en) — no IP geolocation, no extra dependency. Location hints like "mejores restaurantes Madrid" automatically move the country.
+- **Search verticals.** `search_type="news"` for news results via Serper (`google.serper.dev/news`); all providers transparently report whether the vertical was applied or unsupported.
+- **Serper extraction.** Serper's webpage scraper (`scrape.serper.dev`) joins the extraction fallback chain as the last-resort safety net, so a Serper-only setup gets extraction too.
 
 ---
 
