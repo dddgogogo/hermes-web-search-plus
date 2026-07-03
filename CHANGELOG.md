@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [v2.9.0] — 2026-07-03
+
+### Credits
+- #80 by @robbyczgw-cla — Serper news endpoint and webpage scraper extraction.
+- #81 by @robbyczgw-cla — configurable search locale defaults with lightweight query language detection.
 
 ### ✨ Added
 - Added a unified `search_type` parameter to `web_search_plus` (`search` or `news`). Serper serves the news vertical natively via `google.serper.dev/news` (the unified `freshness` filter keeps working there); all other providers run their normal search and report `search_type.applied=false` in result metadata, mirroring the `freshness` contract. CLI: `--search-type`.
@@ -9,6 +13,8 @@
 
 ### 🐛 Fixed
 - `serper.type = "news"` (and the new `search_type="news"`) no longer returns silently empty results: Serper `/news` answers carry results under `news` instead of `organic`, and the parser now reads the right field, including `date`, `source`, thumbnail, and position metadata.
+
+## [Unreleased]
 
 ## [v2.8.1] — 2026-07-02
 
