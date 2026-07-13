@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import os
+import secrets
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,10 +24,14 @@ DEFAULT_OPEN_SECONDS = {
 }
 
 
-def credential_fingerprint(secret: str | None) -> str:
-    """Return a non-reversible identity for one configured provider credential."""
+def credential_fingerprint(
+    secret: str | None, *, local_secret: bytes
+) -> str:
+    """Return an HMAC identity that is useless without the local state secret."""
     material = secret if secret else "<anonymous>"
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:24]
+    return hmac.new(
+        local_secret, material.encode("utf-8"), hashlib.sha256
+    ).hexdigest()[:24]
 
 
 @dataclass(frozen=True)
@@ -70,12 +77,48 @@ class BudgetRecord:
 
 
 class SQLiteStateStore:
-    """Durable state store whose admission path fails closed on SQLite errors."""
+    """Durable policy state; persisted blocks fail closed, I/O loss degrades safely."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        self.secret_path = Path(f"{self.path}.secret")
+        self._local_secret = secrets.token_bytes(32)
+        self._secret_available = False
         self._available = False
+        self._initialize_local_secret()
         self._initialize()
+        if not self._secret_available:
+            self._available = False
+
+    def _initialize_local_secret(self) -> None:
+        """Load or atomically create the DB-local HMAC key with mode 0600."""
+        try:
+            self.secret_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            try:
+                fd = os.open(
+                    self.secret_path,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                )
+            except FileExistsError:
+                fd = None
+            if fd is not None:
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(self._local_secret)
+            persisted = self.secret_path.read_bytes()
+            if len(persisted) < 32:
+                raise OSError("state secret is truncated")
+            os.chmod(self.secret_path, 0o600)
+            self._local_secret = persisted
+            self._secret_available = True
+        except OSError:
+            # Ephemeral HMAC identity is safe; durable circuit state is unavailable.
+            self._available = False
+
+    def fingerprint_credential(self, credential: str | None) -> str:
+        return credential_fingerprint(
+            credential, local_secret=self._local_secret
+        )
 
     @property
     def available(self) -> bool:
@@ -278,9 +321,9 @@ class SQLiteStateStore:
     def admit(self, key: CircuitKey, *, now: int) -> AdmissionDecision:
         if not self._available:
             return AdmissionDecision(
-                False,
+                True,
                 CircuitState.UNKNOWN,
-                SkipReason.CIRCUIT_OPEN,
+                None,
                 store_available=False,
             )
         checks = (
@@ -295,9 +338,9 @@ class SQLiteStateStore:
             record = self.get_circuit(key, error_class)
             if not self._available:
                 return AdmissionDecision(
-                    False,
+                    True,
                     CircuitState.UNKNOWN,
-                    SkipReason.CIRCUIT_OPEN,
+                    None,
                     store_available=False,
                 )
             if record.state is CircuitState.CLOSED:
@@ -321,9 +364,9 @@ class SQLiteStateStore:
                 )
             if not self._available:
                 return AdmissionDecision(
-                    False,
+                    True,
                     CircuitState.UNKNOWN,
-                    SkipReason.CIRCUIT_OPEN,
+                    None,
                     store_available=False,
                 )
             current = self.get_circuit(key, error_class)
@@ -387,41 +430,61 @@ class SQLiteStateStore:
             self._available = False
             return False
 
-    def release_budget(self, scope: str, window_key: str, *, units: int) -> None:
-        self._move_budget(scope, window_key, units=units, commit=False)
-
-    def commit_budget(self, scope: str, window_key: str, *, units: int) -> None:
-        self._move_budget(scope, window_key, units=units, commit=True)
-
-    def _move_budget(
-        self, scope: str, window_key: str, *, units: int, commit: bool
-    ) -> None:
-        if units < 0:
-            raise ValueError("budget units must be non-negative")
-        if not self._available:
-            return
-        used_expression = "used_units + ?" if commit else "used_units"
-        parameters = (
-            (units, units, scope, window_key)
-            if commit
-            else (units, scope, window_key)
+    def release_budget(self, scope: str, window_key: str, *, units: int) -> bool:
+        return self.reconcile_budget(
+            scope, window_key, reserved_units=units, actual_units=0
         )
+
+    def commit_budget(self, scope: str, window_key: str, *, units: int) -> bool:
+        return self.reconcile_budget(
+            scope, window_key, reserved_units=units, actual_units=units
+        )
+
+    def reconcile_budget(
+        self,
+        scope: str,
+        window_key: str,
+        *,
+        reserved_units: int,
+        actual_units: int,
+    ) -> bool:
+        """Atomically commit actual cost and release the unused reservation."""
+        if reserved_units < 0 or actual_units < 0:
+            raise ValueError("budget units must be non-negative")
+        if actual_units > reserved_units:
+            raise ValueError("actual budget units cannot exceed reserved units")
+        if not self._available:
+            return False
         try:
             connection = self._connect()
             try:
-                connection.execute(
-                    f"""
+                connection.execute("BEGIN IMMEDIATE")
+                cursor = connection.execute(
+                    """
                     UPDATE budget_ledger
-                    SET used_units={used_expression},
-                        reserved_units=MAX(0, reserved_units - ?)
+                    SET used_units=used_units + ?,
+                        reserved_units=reserved_units - ?
                     WHERE scope=? AND window_key=?
+                      AND reserved_units >= ?
                     """,
-                    parameters,
+                    (
+                        actual_units,
+                        reserved_units,
+                        scope,
+                        window_key,
+                        reserved_units,
+                    ),
                 )
+                if cursor.rowcount != 1:
+                    connection.rollback()
+                    raise RuntimeError("budget reservation missing during reconciliation")
+                connection.commit()
+                return True
             finally:
                 connection.close()
         except sqlite3.Error:
             self._available = False
+            return False
 
     def get_budget(self, scope: str, window_key: str) -> BudgetRecord:
         if not self._available:
