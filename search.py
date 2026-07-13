@@ -16,7 +16,7 @@ Smart Routing uses multi-signal analysis:
 
 Usage:
     python3 search.py --query "..."                    # Auto-route based on query
-    python3 search.py --provider [you|serper|exa|firecrawl|tavily|linkup|brave|serpbase|querit|perplexity|kilo-perplexity|searxng|auto] --query "..." [options]
+    python3 search.py --provider [you|serper|exa|firecrawl|tavily|linkup|brave|serpbase|querit|searxng|auto] --query "..." [options]
 
 Examples:
     python3 search.py -q "東京 AI ニュース 今日"              # → You.com (multilingual current)
@@ -83,6 +83,7 @@ from quality import (  # noqa: F401 - re-exported for backward-compatible tests/
 )
 from provider_dispatch import SEARCH_DISPATCH
 from provider_registry import PROVIDER_SPECS, SEARCH_PROVIDER_IDS, doctor_catalog
+from request_gate_v3 import validate_provider_mode
 from search_locale import provider_supports_locale, resolve_locale
 from env_loader import load_env_files
 from research import run_research_mode
@@ -679,9 +680,6 @@ Intelligent Auto-Routing:
   Discovery Intent → Exa (Neural)
     "similar to", "companies like", "alternatives", URLs, startups, papers
 
-  Direct Answer Intent → Perplexity (via Kilo Gateway)
-    "what is", "current status", local events, synthesized up-to-date answers
-
 Examples:
   python3 search.py -q "iPhone 16 Pro Max price"          # → Serper (shopping)
   python3 search.py -q "how does HTTPS encryption work"   # → Tavily (research)
@@ -806,7 +804,7 @@ Full docs: See README.md and SKILL.md
         help=(
             "Unified recency filter (day, week, month, year; case-insensitive). "
             "Applied natively where the provider supports it (serper, brave, querit, firecrawl, "
-            "keenable, you, perplexity, kilo-perplexity, searxng); otherwise the search runs "
+            "keenable, you, and searxng); otherwise the search runs "
             "unfiltered and result metadata reports freshness.applied=false"
         )
     )
@@ -849,8 +847,8 @@ Full docs: See README.md and SKILL.md
     parser.add_argument(
         "--linkup-output-type",
         default=linkup_config.get("output_type", "searchResults"),
-        choices=["searchResults", "sourcedAnswer"],
-        help="Linkup output type"
+        choices=["searchResults"],
+        help="Linkup source-results output (fixed by the source-only charter)"
     )
 
     # Exa-specific
@@ -864,8 +862,8 @@ Full docs: See README.md and SKILL.md
     parser.add_argument(
         "--exa-depth",
         default=exa_config.get("depth", "normal"),
-        choices=["normal", "deep", "deep-reasoning"],
-        help="Exa search depth: deep (synthesized, 4-12s), deep-reasoning (cross-reference, 12-50s)"
+        choices=["normal"],
+        help="Exa source-result depth (fixed to normal by the source-only charter)"
     )
     parser.add_argument(
         "--exa-verbosity",
@@ -1206,6 +1204,7 @@ def execute_search_request(args, config: Dict[str, Any]) -> Tuple[Dict[str, Any]
     # namespace (globals()) is passed so adapters resolve search_<provider>
     # late and honour monkeypatches on this module (search.search_you etc.).
     def execute_search(prov: str) -> Dict[str, Any]:
+        validate_provider_mode(prov, "search")
         key = validate_api_key(prov, config)
         adapter = SEARCH_DISPATCH.get(prov)
         if adapter is None:
