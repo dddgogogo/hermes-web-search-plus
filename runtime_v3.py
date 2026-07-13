@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import unicodedata
-import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Mapping
 from urllib.parse import urlsplit, urlunsplit
@@ -23,6 +22,7 @@ from contract_v3 import (
     ResponseV3,
 )
 from orchestrator_v3 import ProviderPlan
+from independence_v3 import analyze_source_independence
 
 
 def _canonical_url(value: str) -> str:
@@ -227,7 +227,7 @@ def response_from_legacy(
     payload: Dict[str, Any],
 ) -> ResponseV3:
     """Build a contract-valid ResponseV3 without modifying the legacy payload."""
-    request_id = request.request_id or str(uuid.uuid4())
+    request_id = request.request_id or plan.execution_id
     routing = payload.get("routing") or {}
     selected = (
         routing.get("provider") or payload.get("provider") or plan.selected_provider
@@ -275,14 +275,7 @@ def response_from_legacy(
     else:
         cache_status = {"disposition": "miss"}
 
-    clusters = [
-        {
-            "cluster_id": _stable_id("cluster", item["canonical_url"]),
-            "member_result_ids": [item["result_id"]],
-            "canonical_url": item["canonical_url"],
-        }
-        for item in results
-    ]
+    clusters, independence_estimate = analyze_source_independence(results)
     return ResponseV3(
         request_id=request_id,
         capability=request.capability,
@@ -302,6 +295,7 @@ def response_from_legacy(
         if request.capability is Capability.SEARCH
         else {},
         dedup_clusters=clusters,
+        source_independence_estimate=independence_estimate,
         warnings=warnings,
         error=error,
     )

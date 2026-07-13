@@ -8,11 +8,23 @@ RequestV3 before they can reach this function.
 from __future__ import annotations
 
 import copy
+import time
 import unicodedata
-from dataclasses import dataclass, replace
-from typing import Any, Callable, Dict, Tuple
+import uuid
+from dataclasses import dataclass, field, replace
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
-from contract_v3 import Capability, RequestV3, ResponseV3
+import cache as legacy_cache
+from cache_v3 import ResponseCacheV3
+from contract_v3 import (
+    Capability,
+    DegradedReason,
+    ErrorClass,
+    ErrorV3,
+    RequestV3,
+    ResponseStatus,
+    ResponseV3,
+)
 
 
 PIPELINE_STAGES: Tuple[str, ...] = (
@@ -36,7 +48,11 @@ PIPELINE_STAGES: Tuple[str, ...] = (
 class ProviderPlan:
     candidate_order: Tuple[str, ...]
     selected_provider: str
+    routing_metadata: Dict[str, Any] = field(default_factory=dict)
     mode: str = "classic"
+    execution_id: str = field(
+        default_factory=lambda: str(uuid.uuid4()), compare=False
+    )
 
     def __post_init__(self) -> None:
         if self.mode not in {"classic", "shadow"}:
@@ -48,8 +64,31 @@ class ProviderPlan:
 
 
 PlanFn = Callable[[RequestV3, Dict[str, Any]], ProviderPlan]
-ExecuteFn = Callable[[RequestV3, ProviderPlan, Dict[str, Any]], Dict[str, Any]]
+@dataclass(frozen=True)
+class CapabilityExecution:
+    payload: Dict[str, Any]
+    provider_attempts: Tuple[Any, ...] = ()
+    stages: Tuple[str, ...] = ("provider_attempt",)
+
+    def __post_init__(self) -> None:
+        if len(set(self.stages)) != len(self.stages):
+            raise ValueError("execution stages must be unique")
+        unknown = set(self.stages) - set(PIPELINE_STAGES)
+        if unknown:
+            raise ValueError(f"unknown execution stages: {sorted(unknown)}")
+        positions = [PIPELINE_STAGES.index(stage) for stage in self.stages]
+        if positions != sorted(positions):
+            raise ValueError("execution stages must follow canonical order")
+
+
+ExecuteFn = Callable[
+    [RequestV3, ProviderPlan, Dict[str, Any]],
+    Union[Dict[str, Any], CapabilityExecution],
+]
 NormalizeFn = Callable[[RequestV3, ProviderPlan, Dict[str, Any]], ResponseV3]
+LegacyCacheLookupFn = Callable[
+    [RequestV3, ProviderPlan, Dict[str, Any]], Optional[CapabilityExecution]
+]
 
 
 @dataclass(frozen=True)
@@ -58,6 +97,7 @@ class CapabilityAdapter:
     plan: PlanFn
     execute: ExecuteFn
     normalize: NormalizeFn
+    legacy_cache_lookup: LegacyCacheLookupFn | None = None
 
 
 @dataclass(frozen=True)
@@ -91,15 +131,169 @@ def execute_v3_request(
         raise ValueError("request and adapter capability differ")
     runtime_config: Dict[str, Any] = config or {}
     plan = adapter.plan(request, runtime_config)
-    legacy_payload = adapter.execute(request, plan, runtime_config)
+    cache_mode = str(request.cache.get("mode") or "prefer")
+    cache_enabled = cache_mode != "bypass"
+    v3_config = runtime_config.get("v3") or {}
+    response_cache = ResponseCacheV3(
+        v3_config.get("cache_dir") or legacy_cache.CACHE_DIR
+    )
+    if cache_enabled:
+        lookup = response_cache.get(
+            request,
+            ttl_seconds=int(request.cache.get("ttl_seconds", 3600)),
+            allow_stale_seconds=int(request.cache.get("allow_stale_seconds", 0)),
+            now=int(time.time()),
+        )
+        if lookup.payload is not None:
+            cached_response = ResponseV3.from_dict(lookup.payload)
+            cached_order = tuple(
+                cached_response.routing_receipt.get("candidate_order") or ()
+            )
+            if cached_order == plan.candidate_order:
+                cache_status = {
+                    "disposition": lookup.disposition,
+                    "entry_id": lookup.entry_id,
+                    "age_seconds": lookup.age_seconds,
+                    "ttl_seconds": int(request.cache.get("ttl_seconds", 3600)),
+                    "served_stale": lookup.disposition == "stale_hit",
+                    "source_contract_version": "3.0",
+                }
+                warnings = list(cached_response.warnings)
+                status = cached_response.status
+                if lookup.disposition == "stale_hit":
+                    status = ResponseStatus.DEGRADED
+                    warnings.append(
+                        {
+                            "code": DegradedReason.SERVED_STALE.value,
+                            "message": "Served stale cached response.",
+                        }
+                    )
+                cached_response = replace(
+                    cached_response,
+                    request_id=request.request_id or plan.execution_id,
+                    status=status,
+                    provider_attempts=[],
+                    cache_status=cache_status,
+                    warnings=warnings,
+                )
+                legacy_payload = copy.deepcopy(lookup.legacy_payload or {})
+                legacy_payload["cached"] = True
+                legacy_payload["cache_age_seconds"] = lookup.age_seconds or 0
+                stage_set = {
+                    "normalize",
+                    "validate",
+                    "cache_lookup",
+                    "candidate_plan",
+                    "response_v3",
+                }
+                return ExecutedV3(
+                    response=cached_response,
+                    plan=plan,
+                    legacy_payload=legacy_payload,
+                    stage_trace=tuple(
+                        stage for stage in PIPELINE_STAGES if stage in stage_set
+                    ),
+                )
+    legacy_execution = (
+        adapter.legacy_cache_lookup(request, plan, runtime_config)
+        if cache_enabled and adapter.legacy_cache_lookup is not None
+        else None
+    )
+    if cache_mode == "only" and legacy_execution is None:
+        response = ResponseV3(
+            request_id=request.request_id or plan.execution_id,
+            capability=request.capability,
+            status=ResponseStatus.FAILED,
+            results=[],
+            provider_attempts=[],
+            routing_receipt={
+                "policy_id": "classic",
+                "policy_revision": "v2.9.1",
+                "mode": plan.mode,
+                "candidate_order": list(plan.candidate_order),
+                "selected_provider": None,
+                "fallback_reason": "none",
+            },
+            cache_status={"disposition": "miss"},
+            error=ErrorV3(
+                error_class=ErrorClass.CONFIG,
+                code="wsp.cache.miss",
+                message="Cache-only request missed.",
+                retryable=False,
+            ),
+        )
+        stage_set = {
+            "normalize",
+            "validate",
+            "cache_lookup",
+            "candidate_plan",
+            "response_v3",
+        }
+        return ExecutedV3(
+            response=response,
+            plan=plan,
+            legacy_payload={
+                "error": "Cache-only request missed",
+                "provider": plan.selected_provider,
+                "results": [],
+            },
+            stage_trace=tuple(
+                stage for stage in PIPELINE_STAGES if stage in stage_set
+            ),
+        )
+    raw_execution = legacy_execution or adapter.execute(request, plan, runtime_config)
+    if isinstance(raw_execution, CapabilityExecution):
+        legacy_payload = raw_execution.payload
+        execution_stages = raw_execution.stages
+        provider_attempts = raw_execution.provider_attempts
+        attempts_authoritative = True
+    else:
+        legacy_payload = raw_execution
+        execution_stages = ("provider_attempt",)
+        provider_attempts = ()
+        attempts_authoritative = False
     response = adapter.normalize(request, plan, legacy_payload)
+    if attempts_authoritative:
+        response = replace(response, provider_attempts=list(provider_attempts))
+    if cache_mode == "bypass":
+        response = replace(response, cache_status={"disposition": "bypassed"})
     if response.capability is not request.capability:
         raise ValueError("adapter returned response for another capability")
     if tuple(response.routing_receipt["candidate_order"]) != plan.candidate_order:
         raise ValueError("response candidate_order drifted from authoritative plan")
+    executed_stage_set = {
+        "normalize",
+        "validate",
+        "candidate_plan",
+        *execution_stages,
+        "result_normalization",
+        "response_v3",
+    }
+    if cache_enabled:
+        executed_stage_set.add("cache_lookup")
+        if response.status is not ResponseStatus.FAILED:
+            try:
+                response_cache.put(
+                    request,
+                    response.to_dict(),
+                    now=int(time.time()),
+                    legacy_payload=legacy_payload,
+                )
+                executed_stage_set.add("cache_write")
+            except OSError:
+                response = replace(
+                    response,
+                    cache_status={
+                        **response.cache_status,
+                        "write_error": "write_failed",
+                    },
+                )
+    stage_trace = tuple(
+        stage for stage in PIPELINE_STAGES if stage in executed_stage_set
+    )
     return ExecutedV3(
         response=response,
         plan=plan,
         legacy_payload=copy.deepcopy(legacy_payload),
-        stage_trace=PIPELINE_STAGES,
+        stage_trace=stage_trace,
     )
