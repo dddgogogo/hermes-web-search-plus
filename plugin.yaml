@@ -1,5 +1,5 @@
 name: web-search-plus
-version: "2.9.1"
+version: "3.0.0"
 description: "Multi-provider web search, URL extraction, quality reports, and opt-in research mode"
 author: robbyczgw-cla
 requires_env: []
@@ -33,7 +33,7 @@ onboarding:
     auto_routing: "python ~/.hermes/plugins/web-search-plus/setup.py config set-routing on"
     priority: "python ~/.hermes/plugins/web-search-plus/setup.py config set-priority you,serper,exa,firecrawl,tavily,linkup,parallel"
     fallback: "python ~/.hermes/plugins/web-search-plus/setup.py config set-fallback serper"
-    disable_provider: "python ~/.hermes/plugins/web-search-plus/setup.py config disable perplexity"
+    disable_provider: "python ~/.hermes/plugins/web-search-plus/setup.py config disable brave"
     block_auto_provider: "python ~/.hermes/plugins/web-search-plus/setup.py config set-auto-allow brave off"
     reset: "python ~/.hermes/plugins/web-search-plus/setup.py config reset --yes"
   config_file: "~/.hermes/plugins/config.json"
