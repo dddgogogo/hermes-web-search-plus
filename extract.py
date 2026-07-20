@@ -681,6 +681,11 @@ def _extract_cache_vary(
         include_images=bool(request.options.get("include_images", False)),
         include_raw_html=bool(request.options.get("include_raw_html", False)),
         render_js=bool(request.options.get("render_js", False)),
+        semantic_spans={
+            "enabled": request.options.get("spans") is True,
+            "query": request.options.get("spans_query"),
+            "span_contract_version": 1,
+        },
         provider_selection={
             "requested_provider": str(request.routing.get("provider") or "auto"),
             "allow_fallback": bool(request.routing.get("allow_fallback", True)),
@@ -815,6 +820,8 @@ def extract_plus(
     include_images: bool = False,
     include_raw_html: bool = False,
     render_js: bool = False,
+    spans: bool = False,
+    spans_query: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
 ) -> dict:
     """Legacy extract projection over the sole native v3 execution path."""
@@ -831,6 +838,8 @@ def extract_plus(
             "include_images": include_images,
             "include_raw_html": include_raw_html,
             "render_js": render_js,
+            "spans": spans,
+            "spans_query": spans_query,
         },
     )
     execution = execute_v3_request(

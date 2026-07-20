@@ -790,6 +790,8 @@ Full docs: See README.md and SKILL.md
     parser.add_argument("--extract-images", action="store_true", help="Extract image metadata when supported")
     parser.add_argument("--include-raw-html", action="store_true", help="Include raw HTML when supported")
     parser.add_argument("--render-js", action="store_true", help="Render JavaScript before extraction when supported")
+    parser.add_argument("--spans", action="store_true", help="Select deterministic semantic spans from extracted text")
+    parser.add_argument("--spans-query", help="Query used to rank extracted semantic spans")
     parser.add_argument(
         "--max-results", "-n", 
         type=int, 
@@ -1157,6 +1159,8 @@ def main():
             include_images=args.extract_images,
             include_raw_html=args.include_raw_html,
             render_js=args.render_js,
+            spans=args.spans,
+            spans_query=args.spans_query,
             config=config,
         )
         indent = None if args.compact else 2
@@ -2294,6 +2298,8 @@ def run_extract_request(
     include_images: bool = False,
     include_raw_html: bool = False,
     render_js: bool = False,
+    spans: bool = False,
+    spans_query: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Run URL extraction in-process and return the result dict."""
@@ -2305,6 +2311,8 @@ def run_extract_request(
         include_images=include_images,
         include_raw_html=include_raw_html,
         render_js=render_js,
+        spans=spans,
+        spans_query=spans_query,
         config=config,
     )
 
