@@ -302,3 +302,34 @@ def test_provider_health_handles_missing_state_database(tmp_path: Path) -> None:
     payload = console.build_provider_health(store, days=7)
 
     assert payload == {"schema_version": 1, "days": 7, "buckets": []}
+
+
+def test_provider_health_includes_live_rolling_stats(tmp_path: Path) -> None:
+    console = importlib.import_module("operator_console_v3")
+    day = 86400
+    store = _state_store_with_samples(
+        tmp_path, [("serper", 0, 10 * day + 100, 200, 5, 0)]
+    )
+    stats_path = tmp_path / "provider_stats.json"
+    stats_path.write_text(
+        json.dumps(
+            {
+                "serper": [{"t": 10 * day + 500, "lat": 0.4, "n": 3, "err": True}],
+                "brave": [{"t": 10 * day + 600, "lat": 0.15, "n": 6, "err": False}],
+                "not-a-provider": [{"t": 10 * day, "lat": 1.0, "n": 1, "err": False}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = console.build_provider_health(store, days=7, stats_path=stats_path)
+
+    buckets = {(b["provider"], b["day"]): b for b in payload["buckets"]}
+    serper = buckets[("serper", 10 * day)]
+    assert serper["samples"] == 2
+    assert serper["errors"] == 1
+    assert serper["result_count_total"] == 8
+    brave = buckets[("brave", 10 * day)]
+    assert brave["samples"] == 1
+    assert brave["median_latency_ms"] == 150
+    assert ("not-a-provider", 10 * day) not in buckets

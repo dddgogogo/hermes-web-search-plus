@@ -72,7 +72,8 @@ Sections:
 ### `GET /api/v3/provider-health?limit=DAYS`
 
 Returns per-provider daily health buckets aggregated from persisted adaptive
-samples (`adaptive_samples_v3`): sample count, error count/rate, total result
+samples (`adaptive_samples_v3`, migrated legacy history) merged with the live
+rolling outcome window (`provider_stats.json`): sample count, error count/rate, total result
 count, and median latency per provider per UTC day. The window is anchored to
 the newest stored sample, defaults to 7 days, and is capped at 30. Read-only:
 the endpoint opens the state database via the fail-closed read-only path and

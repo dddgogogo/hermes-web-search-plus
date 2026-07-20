@@ -354,6 +354,8 @@ def _handler_class() -> type[BaseHTTPRequestHandler]:
                 payload = backend.build_provider_health(
                     SQLiteStateStore.open_readonly(self._operator_server.state_path),
                     days=_parse_limit(parsed.query) if parsed.query else 7,
+                    stats_path=Path(self._operator_server.cache_root)
+                    / "provider_stats.json",
                 )
             elif parsed.path == "/api/v3/shadow-evaluation":
                 if parsed.query:

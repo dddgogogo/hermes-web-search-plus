@@ -295,8 +295,48 @@ def build_shadow_evaluation(
 PROVIDER_HEALTH_MAX_DAYS = 30
 
 
+def _live_adaptive_sample_rows(
+    stats_path: Path,
+) -> list[tuple[str, int, int, int, int]]:
+    """Read live rolling provider samples in adaptive-sample row shape.
+
+    Live traffic records outcomes into ``provider_stats.json`` (best-effort
+    rolling window); the migrated ``adaptive_samples_v3`` table only holds
+    imported legacy history. Health trends must see both. Only provider ids
+    and numeric fields are read — malformed content yields no rows.
+    """
+    try:
+        raw = json.loads(stats_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(raw, Mapping):
+        return []
+    rows: list[tuple[str, int, int, int, int]] = []
+    for provider, samples in raw.items():
+        if provider not in PROVIDER_SPECS or not isinstance(samples, list):
+            continue
+        for sample in samples:
+            if not isinstance(sample, Mapping):
+                continue
+            try:
+                stamp = int(sample.get("t", 0) or 0)
+                latency_ms = int(round(float(sample.get("lat", 0.0) or 0.0) * 1000))
+                count = int(sample.get("n", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if stamp <= 0:
+                continue
+            rows.append(
+                (provider, stamp, max(0, latency_ms), max(0, count), 1 if sample.get("err") else 0)
+            )
+    return rows
+
+
 def build_provider_health(
-    store: SQLiteStateStore, *, days: int = 7
+    store: SQLiteStateStore,
+    *,
+    days: int = 7,
+    stats_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Build per-provider daily health trends from persisted adaptive samples.
 
@@ -306,7 +346,9 @@ def build_provider_health(
     """
     bounded_days = max(1, min(int(days), PROVIDER_HEALTH_MAX_DAYS))
     rows: list[dict[str, Any]] = []
-    samples = store.adaptive_sample_rows()
+    samples = list(store.adaptive_sample_rows())
+    if stats_path is not None:
+        samples.extend(_live_adaptive_sample_rows(Path(stats_path)))
     newest_ts = max((sample_time for _, sample_time, _, _, _ in samples), default=0)
     cutoff = newest_ts - bounded_days * 86400
     buckets: dict[tuple[str, int], dict[str, Any]] = {}
