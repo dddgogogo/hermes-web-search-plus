@@ -420,3 +420,53 @@ def test_transient_provider_health_changes_do_not_vary_cache_identity(
     assert calls == 1, "second identical request must be served from cache"
     assert second.cache_status.get("disposition") in {"fresh_hit", "stale_hit"}
     assert first.results[0]["url"] == second.results[0]["url"]
+
+
+def test_realistic_exa_result_shape_writes_and_hits_the_cache(
+    tmp_path, monkeypatch
+):
+    """The live-retest regression: real Exa results carry favicon and
+    published_date; those benign scalars must not block the cache write,
+    and a hit must reproduce them."""
+    calls = 0
+    exa_result = {
+        "url": "https://tokio.rs/blog/2019-10-scheduler",
+        "title": "Making the Tokio scheduler 10x faster",
+        "content": "scheduler content",
+        "raw_content": "scheduler content",
+        "provider": "exa",
+        "favicon": "https://tokio.rs/favicon.ico",
+        "published_date": "2019-10-13T00:00:00.000Z",
+    }
+
+    def fake_core(**_kwargs):
+        nonlocal calls
+        calls += 1
+        return {
+            "provider": "exa",
+            "results": [dict(exa_result)],
+            "routing": {
+                "provider": "exa",
+                "requested_provider": "auto",
+                "fallback_used": True,
+                "fallback_errors": [{"provider": "tavily", "error": "quota"}],
+            },
+        }
+
+    monkeypatch.setattr(extract, "_extract_plus_core", fake_core)
+    config = _config(tmp_path)
+
+    def _request():
+        return legacy_request_to_v3(
+            Capability.EXTRACT,
+            {"urls": [exa_result["url"]], "provider": "auto"},
+        )
+
+    first = extract.run_extract_request_v3(_request(), config=config)
+    second = extract.run_extract_request_v3(_request(), config=config)
+
+    assert calls == 1, "identical realistic request must be served from cache"
+    assert second.cache_status.get("disposition") == "fresh_hit"
+    assert first.results and second.results
+    hit_result = second.results[0]
+    assert hit_result["url"]["observed"] == exa_result["url"]

@@ -60,6 +60,9 @@ def cache_material_from_response(
         }
         if isinstance(item.get("provider"), str):
             hint["provider"] = item["provider"]
+        for scalar_field in ("favicon", "published_date"):
+            if isinstance(item.get(scalar_field), str):
+                hint[scalar_field] = item[scalar_field]
         legacy_projection_hints.append(hint)
     return {
         "origin_execution_id": str(
@@ -171,6 +174,9 @@ def legacy_payload_from_cache_material(material: Dict[str, Any]) -> Dict[str, An
                 legacy_item["raw_content"] = content
             if isinstance(hint.get("provider"), str):
                 legacy_item["provider"] = hint["provider"]
+            for scalar_field in ("favicon", "published_date"):
+                if isinstance(hint.get(scalar_field), str):
+                    legacy_item[scalar_field] = hint[scalar_field]
         else:
             legacy_item["snippet"] = (
                 snippet.get("text")

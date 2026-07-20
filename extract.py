@@ -782,6 +782,11 @@ def _extract_cache_write_eligible(
         "content",
         "raw_content",
         "provider",
+        # Benign scalar metadata emitted by real providers (e.g. Exa). These
+        # round-trip losslessly through the projection hints, so they must not
+        # disqualify a write.
+        "favicon",
+        "published_date",
     }
     for item in legacy_payload.get("results") or []:
         if not isinstance(item, dict) or item.get("error"):
@@ -790,6 +795,12 @@ def _extract_cache_write_eligible(
             return False
         if "provider" in item and not isinstance(item.get("provider"), str):
             return False
+        for scalar_field in ("favicon", "published_date"):
+            if scalar_field in item and not (
+                item.get(scalar_field) is None
+                or isinstance(item.get(scalar_field), str)
+            ):
+                return False
         if "raw_content" in item and item.get("raw_content") != item.get("content"):
             return False
     return True
