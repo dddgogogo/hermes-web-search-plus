@@ -19,35 +19,23 @@ It adds two Hermes tools:
 
 > Ported from [web-search-plus-plugin](https://github.com/robbyczgw-cla/web-search-plus-plugin) for the [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin API.
 
+Current release: **v3.1.1** — see the [Changelog](CHANGELOG.md) and [3.1 Release Notes](docs/RELEASE_NOTES_V31.md).
+
 ---
 
-## What 3.0 improves
+## Why 3.x
 
-3.0 keeps the same two public tools and call style, but makes the evidence underneath them far more transparent and robust.
+The same two tools since 2.x — what changed underneath is how much you can trust and inspect the results:
 
-- **Source-only by construction.** Search and extraction stay separate from answer synthesis, claim generation, and truth verification. Provider endpoints without a verified source-only mode are rejected rather than quietly reshaped.
-- **Traceable provenance.** Results point back to source observations, with typed records of providers tried, retried, skipped, failed, or served from cache.
-- **Bounded extraction context.** Long pages return a useful preview while keeping the full cleaned text available on demand instead of flooding the agent context.
-- **Conservative, explainable routing.** Classic Routing v2 remains authoritative, tie-breaking stays deterministic, and Brave joins the default auto-pool for independent-index diversity.
-- **Honest failures.** Typed errors and response metadata expose missing credentials, rate limits, timeouts, empty results, and filters a provider could not apply.
-- **Reversible upgrades.** State migration starts with a dry run, creates verified backups before writing, and supports rollback.
-- **Local operational visibility.** The read-only Operator Console shows routing receipts, provider readiness, cache state, and applied bounds without calling providers or changing configuration.
+- **Sources, not answers.** Every result is a real source with typed provenance; the engine never composes an answer for you.
+- **Honest execution.** Receipts show which providers ran, failed, fell back, or served from cache — nothing fails silently.
+- **Long pages without context floods.** Extraction returns a bounded preview and keeps the full cleaned text available on demand.
+- **A second routing opinion, safely.** An opt-in shadow policy records what it *would* have chosen — it never changes what runs.
+- **Spend control before spending.** Opt-in budget preflight checks call caps, daily quota, and context budgets before the first provider call.
+- **Quality you can measure.** Reports score domain, URL, and content diversity, so ten copies of the same SEO page stop counting as ten sources.
+- **Runs with zero paid keys** if you want: an opt-in self-hosted profile uses SearXNG plus Keenable's public tier.
 
-Read the full [3.0 Release Notes](docs/RELEASE_NOTES_V3.md) for compatibility details and deliberate 3.1 deferrals.
-
-## What 3.1 adds
-
-3.1 ships everything 3.0 deferred, plus the quality and budget layers around it. Defaults stay bit-identical to 3.0.2 — every feature is opt-in.
-
-- **Full Shadow Observer.** A deterministic shadow routing policy runs beside Classic, persists its would-be decisions (never query text), and reports agreement and divergences in the Console — without ever affecting execution.
-- **Budget Preflight.** Call caps, daily quota, timeout and context budgets are checked before the first provider call; violations degrade deterministically or abort with a typed error instead of spending money first.
-- **Diversity Score.** Quality reports measure domain, URL, and content diversity, so ten variants of the same SEO page stop looking like ten sources. Research reranking stays opt-in.
-- **Extraction cache identity.** Request-exact, versioned cache identity with per-field provenance and fail-closed miss semantics — no wrong hits after endpoint, budget, or config changes.
-- **Self-hosted profile.** `profile: self_hosted` runs automatic routing on SearXNG and keyless Keenable only — no commercial API keys required.
-- **Semantic spans.** Opt-in query-conditioned passages on extraction with a mechanical offset contract (NFC, codepoints, half-open ranges).
-- **Public Provider SDK.** New providers are one self-contained `providers.d` module — zero core-file edits — with scaffolding and a conformance suite.
-
-Read the full [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) and [3.1 Migration](docs/V31_MIGRATION.md) for details.
+Everything new since 3.0 is opt-in; defaults stay stable across upgrades. Full details: [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) · [3.0 Release Notes](docs/RELEASE_NOTES_V3.md).
 
 ---
 
@@ -58,8 +46,8 @@ Read the full [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) and [3.1 Migration]
 hermes plugins install robbyczgw-cla/hermes-web-search-plus --enable
 
 # 2) Inspect provider readiness and configure the providers you use
-python ~/.hermes/plugins/web-search-plus/setup.py status
-python ~/.hermes/plugins/web-search-plus/setup.py setup --preset starter
+python3 ~/.hermes/plugins/web-search-plus/setup.py status
+python3 ~/.hermes/plugins/web-search-plus/setup.py setup --preset starter
 
 # 3) Reload Hermes so the tools are registered
 # CLI: exit and start `hermes` again, or use /reset in-session
@@ -70,18 +58,31 @@ cd ~/.hermes/plugins/web-search-plus
 python3 search.py --query "Hermes Agent latest release" --provider auto --quality-report
 ```
 
-Add at least one search-capable provider for `web_search_plus`; add an extraction-capable provider for `web_extract_plus`. The setup helper stores keys in the active Hermes environment file — never commit them to the repository.
+Web Search Plus supports 12 search and 8 extraction providers — you do **not** need them all. One search-capable key enables `web_search_plus`; one extraction-capable key enables `web_extract_plus`; more keys just make routing smarter. The setup helper stores keys in the active Hermes environment file — never commit them to the repository.
+
+### Upgrading from 2.x? Relax.
+
+Your setup keeps working: the public tools, their names, and your provider keys are unchanged, and updating the plugin is enough — searches and extractions run immediately.
+
+```bash
+hermes plugins update web-search-plus
+```
+
+Two honest notes:
+
+- **One breaking change (since 3.0):** the Perplexity and Kilo answer endpoints are no longer registered — Web Search Plus is source-only by design. Existing keys are ignored, not deleted.
+- **Optional, not required:** `python3 search.py state-migrate` imports your old 2.x routing telemetry (provider health/stats) so adaptive routing keeps its memory. It is dry-run by default, creates a verified backup before `--apply`, and supports rollback. Skipping it loses nothing except that routing re-learns from scratch. Details: [3.0 Migration](docs/V3_MIGRATION.md), then [3.1 Migration](docs/V31_MIGRATION.md) for the opt-in feature matrix.
 
 ### Self-hosted / no-paid-key profile
 
 For a privacy- and budget-oriented setup with no commercial API key, use the self-hosted wizard preset:
 
 ```bash
-python ~/.hermes/plugins/web-search-plus/setup.py setup --preset self-hosted
-python ~/.hermes/plugins/web-search-plus/setup.py status
+python3 ~/.hermes/plugins/web-search-plus/setup.py setup --preset self-hosted
+python3 ~/.hermes/plugins/web-search-plus/setup.py status
 ```
 
-It selects the derived `self_hosted` profile: automatic search uses only your SearXNG instance and keyless Keenable, while automatic extraction uses the keyless-capable path. Configure SearXNG with `searxng.base_url` (the older `instance_url` still works); the preset enables Keenable's existing public tier without writing a key. See the [Self-hosted profile guide](docs/USER_GUIDE.md#self-hosted-profile) for prerequisites and explicit-provider behavior.
+It selects the derived `self_hosted` profile: automatic search uses only your SearXNG instance and keyless Keenable, while automatic extraction runs through Keenable's public fetch tier (SearXNG does not extract; the public tier is rate-limited and has no SLA). Configure SearXNG with `searxng.base_url` (the older `instance_url` still works); the preset enables Keenable's existing public tier without writing a key. See the [Self-hosted profile guide](docs/USER_GUIDE.md#self-hosted-profile) for prerequisites and explicit-provider behavior.
 
 Update later with:
 
@@ -118,6 +119,16 @@ Full parameters, freshness and locale behavior, provider selection, extraction c
 ---
 
 ## Documentation
+
+**Where to go next:**
+
+- **Installing or configuring providers** → [User Guide](docs/USER_GUIDE.md)
+- **Upgrading from 2.x** → [3.0 Migration](docs/V3_MIGRATION.md), then [3.1 Migration](docs/V31_MIGRATION.md)
+- **What changed** → [Changelog](CHANGELOG.md) · [3.1 Release Notes](docs/RELEASE_NOTES_V31.md)
+- **Troubleshooting** → [FAQ](docs/FAQ.md) · [Operator Console](docs/V3_OPERATOR_CONSOLE.md)
+- **Building a provider** → [Provider SDK](docs/PROVIDER_SDK.md) · [Architecture](docs/ARCHITECTURE.md)
+
+The full reference, including the normative v3 contracts for implementers and reviewers:
 
 ### Start & upgrade
 
