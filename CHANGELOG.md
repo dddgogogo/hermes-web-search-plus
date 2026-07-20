@@ -5,6 +5,7 @@
 ### ✨ Added
 - Added persisted, deterministic Shadow quality-policy observations for auto-routed searches. Classic Routing v2 remains authoritative; the new local Operator Console aggregate reports agreement and provider divergences without storing query text.
 - Added opt-in v3 budget preflight. Provider fan-out, daily ledger quota, request deadline, and extraction context are checked before provider execution, with typed receipt evidence for deterministic degradation or zero-attempt budget failures.
+- Added deterministic Diversity Score diagnostics for quality reports: registrable-domain coverage, canonical-URL duplication, near-duplicate snippets, and research-provider mix. Research-result reranking remains explicitly opt-in.
 
 ## [v3.0.2] — 2026-07-14
 

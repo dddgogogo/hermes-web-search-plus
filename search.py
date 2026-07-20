@@ -84,6 +84,7 @@ from quality import (  # noqa: F401 - re-exported for backward-compatible tests/
     rerank_results_for_intent,
     select_research_providers,
 )
+from diversity_v3 import DEFAULT_NEAR_DUPLICATE_THRESHOLD
 from provider_adapter_protocol import validate_adapter_result
 from provider_dispatch import SEARCH_DISPATCH
 from provider_registry import (
@@ -1262,6 +1263,29 @@ def _legacy_search_cache_context(
     }
 
 
+def _diversity_settings(config: Dict[str, Any]) -> Tuple[bool, float]:
+    """Read the validated diversity settings with safe direct-call fallbacks."""
+    quality_config = config.get("quality") if isinstance(config.get("quality"), dict) else {}
+    diversity_config = (
+        quality_config.get("diversity")
+        if isinstance(quality_config.get("diversity"), dict)
+        else {}
+    )
+    rerank = diversity_config.get("rerank") is True
+    threshold = diversity_config.get(
+        "near_duplicate_threshold", DEFAULT_NEAR_DUPLICATE_THRESHOLD
+    )
+    if isinstance(threshold, bool):
+        threshold = DEFAULT_NEAR_DUPLICATE_THRESHOLD
+    try:
+        threshold = float(threshold)
+    except (TypeError, ValueError):
+        threshold = DEFAULT_NEAR_DUPLICATE_THRESHOLD
+    if threshold < 0.0 or threshold > 1.0:
+        threshold = DEFAULT_NEAR_DUPLICATE_THRESHOLD
+    return rerank, threshold
+
+
 def _finalize_research_result(
     result: Dict[str, Any],
     *,
@@ -1303,6 +1327,7 @@ def _finalize_research_result(
         query=args.query or "",
         include_domains=args.include_domains,
     )
+    _diversity_rerank, near_duplicate_threshold = _diversity_settings(config)
     result["quality_report"] = build_quality_report(
         query=args.query,
         result=result,
@@ -1311,6 +1336,7 @@ def _finalize_research_result(
         eligible_providers=research_providers,
         cooldown_skips=cooldown_skips,
         errors=result.get("routing", {}).get("provider_errors", []),
+        near_duplicate_threshold=near_duplicate_threshold,
     )
     return result
 
@@ -1473,6 +1499,7 @@ def _execute_search_request_core(args, config: Dict[str, Any]) -> Tuple[Dict[str
             }
             return error_result, 1
 
+        diversity_rerank, near_duplicate_threshold = _diversity_settings(config)
         result = run_research_mode(
             query=args.query,
             research_providers=research_providers,
@@ -1486,6 +1513,8 @@ def _execute_search_request_core(args, config: Dict[str, Any]) -> Tuple[Dict[str
             max_results=args.max_results,
             max_extract_urls=args.research_extract_count,
             time_budget_seconds=args.research_time_budget,
+            diversity_rerank=diversity_rerank,
+            near_duplicate_threshold=near_duplicate_threshold,
         )
         result = _finalize_research_result(
             result,
@@ -1648,6 +1677,7 @@ def _execute_search_request_core(args, config: Dict[str, Any]) -> Tuple[Dict[str
             result["metadata"].setdefault("dedup_count", 0)
 
         if args.quality_report:
+            _diversity_rerank, near_duplicate_threshold = _diversity_settings(config)
             result["quality_report"] = build_quality_report(
                 query=args.query,
                 result=result,
@@ -1656,6 +1686,7 @@ def _execute_search_request_core(args, config: Dict[str, Any]) -> Tuple[Dict[str
                 eligible_providers=eligible_providers,
                 cooldown_skips=cooldown_skips,
                 errors=errors,
+                near_duplicate_threshold=near_duplicate_threshold,
             )
 
         return result, 0
@@ -1895,6 +1926,7 @@ def _execute_research_v3(
         and max_wall_time_ms > 0
     ):
         time_budget_seconds = min(time_budget_seconds, max_wall_time_ms / 1000)
+    diversity_rerank, near_duplicate_threshold = _diversity_settings(config)
     payload = run_research_mode(
         query=str(request.input.get("query") or ""),
         research_providers=providers,
@@ -1908,6 +1940,8 @@ def _execute_research_v3(
         max_extract_urls=int(getattr(args, "research_extract_count", 3) or 3),
         time_budget_seconds=time_budget_seconds,
         on_provider_timeout=timed_out_providers.add,
+        diversity_rerank=diversity_rerank,
+        near_duplicate_threshold=near_duplicate_threshold,
     )
     extraction_error = str(
         (payload.get("routing") or {}).get("extraction_error") or ""

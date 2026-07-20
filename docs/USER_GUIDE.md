@@ -408,6 +408,25 @@ Search results pass through a quality layer before they reach the agent:
 - **Adaptive routing:** every real provider call records latency, error, and empty-result outcomes (rolling window, last 50 calls / 7 days). Routing blends a bounded adjustment (±1.0) into the scores, so providers that are currently fast and productive win close calls — strong query-class signals are never overridden. Disable with `auto_routing.adaptive_routing: false` in `config.json`; adjustments are visible in `quality_report.adaptive_adjustments`.
 - **Spam/mirror filter:** results from known Stack Overflow/GitHub content mirrors and SEO scrapers are removed (reported in `metadata.spam_filtered`). Extend via `quality.blocked_domains`, rescue a domain via `quality.allowed_domains`, or disable with `quality.filter_spam: false`.
 - **Domain diversity:** at most 2 results per domain keep their position; overflow is moved behind the diverse head (`quality.max_results_per_domain`, `0` disables).
+
+### Diversity Score
+
+When quality reporting is enabled, `quality_report.diversity` explains result-set variety without changing the returned order. Its 0–1 score is a documented weighted blend: 40% registrable-domain diversity, 30% canonical-URL uniqueness, 20% snippet-content diversity, and 10% provider mix. Tracking parameters and fragments do not make URLs distinct; snippets are compared with casefolded word trigrams, and pairs at or above the configured threshold are reported as near duplicates. A single-provider set receives `provider_mix: 1.0`, because provider mix is only meaningful after a research merge.
+
+The default is diagnostic-only. To let Research Mode stably move URL/content duplicate candidates behind diverse results (never as a one-off removal), opt in with:
+
+```json
+{
+  "quality": {
+    "diversity": {
+      "rerank": true,
+      "near_duplicate_threshold": 0.6
+    }
+  }
+}
+```
+
+`near_duplicate_threshold` must be between `0.0` and `1.0`; higher values require more overlap. With `rerank: false` (the default), research merge ordering and deduplication behavior are unchanged.
 - **Explicit intent wins:** queries with `site:` operators or `include_domains` are exempt — constrained domains bypass the spam filter and the diversity rerank is skipped entirely.
 
 ## Reliability and cost controls
