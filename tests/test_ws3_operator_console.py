@@ -202,3 +202,103 @@ def test_overview_refuses_symlinked_cache_and_state_ancestors(
     assert payload["engine"]["state_available"] is False
     assert payload["cache"]["response_entries"] == 0
     assert payload["circuits"]["open"] == 0
+
+
+def _state_store_with_samples(tmp_path: Path, samples):
+    state_store = importlib.import_module("state_store_v3")
+    db_path = tmp_path / "state.sqlite3"
+    connection = sqlite3.connect(db_path)
+    state_store.initialize_state_schema(connection)
+    connection.executemany(
+        """
+        INSERT INTO adaptive_samples_v3
+            (provider, source_index, sample_time, latency_ms, result_count,
+             error, source_digest, migrated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'digest', 0)
+        """,
+        samples,
+    )
+    connection.commit()
+    connection.close()
+    return state_store.SQLiteStateStore.open_readonly(db_path)
+
+
+def test_provider_health_aggregates_daily_samples_from_state_store(
+    tmp_path: Path,
+) -> None:
+    console = importlib.import_module("operator_console_v3")
+    day = 86400
+    store = _state_store_with_samples(
+        tmp_path,
+        [
+            ("serper", 0, 10 * day + 100, 200, 5, 0),
+            ("serper", 1, 10 * day + 200, 400, 3, 1),
+            ("serper", 2, 11 * day + 100, 300, 4, 0),
+            ("brave", 0, 11 * day + 100, 150, 6, 0),
+        ],
+    )
+
+    payload = console.build_provider_health(store, days=7)
+
+    assert payload == {
+        "schema_version": 1,
+        "days": 7,
+        "buckets": [
+            {
+                "provider": "brave",
+                "day": 11 * day,
+                "samples": 1,
+                "errors": 0,
+                "result_count_total": 6,
+                "median_latency_ms": 150,
+                "error_rate": 0.0,
+            },
+            {
+                "provider": "serper",
+                "day": 10 * day,
+                "samples": 2,
+                "errors": 1,
+                "result_count_total": 8,
+                "median_latency_ms": 400,
+                "error_rate": 0.5,
+            },
+            {
+                "provider": "serper",
+                "day": 11 * day,
+                "samples": 1,
+                "errors": 0,
+                "result_count_total": 4,
+                "median_latency_ms": 300,
+                "error_rate": 0.0,
+            },
+        ],
+    }
+
+
+def test_provider_health_bounds_days_and_windows_from_newest_sample(
+    tmp_path: Path,
+) -> None:
+    console = importlib.import_module("operator_console_v3")
+    day = 86400
+    store = _state_store_with_samples(
+        tmp_path,
+        [
+            ("serper", 0, 1 * day, 100, 1, 0),
+            ("serper", 1, 40 * day, 100, 1, 0),
+        ],
+    )
+
+    payload = console.build_provider_health(store, days=99999)
+
+    assert payload["days"] == console.PROVIDER_HEALTH_MAX_DAYS
+    assert [bucket["day"] for bucket in payload["buckets"]] == [40 * day]
+
+
+def test_provider_health_handles_missing_state_database(tmp_path: Path) -> None:
+    console = importlib.import_module("operator_console_v3")
+    state_store = importlib.import_module("state_store_v3")
+    store = state_store.SQLiteStateStore.open_readonly(tmp_path / "absent.sqlite3")
+
+    payload = console.build_provider_health(store, days=7)
+
+    assert payload == {"schema_version": 1, "days": 7, "buckets": []}

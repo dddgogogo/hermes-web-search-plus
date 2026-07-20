@@ -7,6 +7,7 @@
 - Added opt-in v3 budget preflight. Provider fan-out, daily ledger quota, request deadline, and extraction context are checked before provider execution, with typed receipt evidence for deterministic degradation or zero-attempt budget failures.
 - Added deterministic Diversity Score diagnostics for quality reports: registrable-domain coverage, canonical-URL duplication, near-duplicate snippets, and research-provider mix. Research-result reranking remains explicitly opt-in.
 - Added the versioned v3 extraction-cache identity contract: request-exact URL, budget, bounded-context, extraction-control, provider-endpoint, URL-policy and retained-storage variation; lossless extraction provenance/legacy alias round-trips; and fail-closed identity-version and corrupt-entry quarantine handling.
+- Added the read-only Operator Console endpoint `/api/v3/provider-health`: per-provider daily trend buckets (samples, errors, error rate, result counts, median latency) aggregated from persisted adaptive samples, without provider calls or stored query text.
 
 ### ⚠️ Deprecated
 - The legacy pre-v3 execution modules (`cache.py` search-response caching and the non-v3 projection paths they serve) are deprecated. All public tools already execute through the native v3 orchestrator; the legacy modules remain only as compatibility shims and are planned for removal no earlier than 3.2. Operators do not need to change anything — this is an advance notice, not a behavior change.

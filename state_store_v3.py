@@ -727,6 +727,36 @@ class SQLiteStateStore:
             return False
         return True
 
+    def adaptive_sample_rows(self) -> list[tuple[str, int, int, int, int]]:
+        """Return (provider, sample_time, latency_ms, result_count, error) rows."""
+        if not self._available:
+            return []
+        try:
+            connection = self._connect()
+            try:
+                rows = connection.execute(
+                    """
+                    SELECT provider, sample_time, latency_ms, result_count, error
+                    FROM adaptive_samples_v3
+                    ORDER BY provider, sample_time
+                    """
+                ).fetchall()
+            finally:
+                connection.close()
+            return [
+                (
+                    str(row["provider"]),
+                    int(row["sample_time"]),
+                    int(row["latency_ms"]),
+                    int(row["result_count"]),
+                    int(row["error"]),
+                )
+                for row in rows
+            ]
+        except sqlite3.Error:
+            self._available = False
+            return []
+
     def shadow_evaluation_summary(self, window_seconds: int) -> dict[str, Any]:
         """Return a bounded aggregate with no query text or request identifiers."""
         empty = {

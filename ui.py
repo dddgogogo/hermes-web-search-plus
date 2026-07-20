@@ -350,6 +350,11 @@ def _handler_class() -> type[BaseHTTPRequestHandler]:
                     **common,
                     limit=_parse_limit(parsed.query),
                 )
+            elif parsed.path == "/api/v3/provider-health":
+                payload = backend.build_provider_health(
+                    SQLiteStateStore.open_readonly(self._operator_server.state_path),
+                    days=_parse_limit(parsed.query) if parsed.query else 7,
+                )
             elif parsed.path == "/api/v3/shadow-evaluation":
                 if parsed.query:
                     raise ValueError("shadow evaluation does not accept query parameters")

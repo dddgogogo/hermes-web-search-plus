@@ -68,6 +68,34 @@ Sections:
 
 `limit` is an integer clamped to 1–100. Records are newest first. `kind` is `search|extract`. Historical untyped records load as `search`. Missing extraction history is represented by `extract_collected=false` / `status="not_collected"`, never by a fabricated zero-result run.
 
+### `GET /api/v3/provider-health?limit=DAYS`
+
+Returns per-provider daily health buckets aggregated from persisted adaptive
+samples (`adaptive_samples_v3`): sample count, error count/rate, total result
+count, and median latency per provider per UTC day. The window is anchored to
+the newest stored sample, defaults to 7 days, and is capped at 30. Read-only:
+the endpoint opens the state database via the fail-closed read-only path and
+never triggers provider calls. No query text, URLs, or request identifiers are
+stored or exposed.
+
+```json
+{
+  "schema_version": 1,
+  "days": 7,
+  "buckets": [
+    {
+      "provider": "serper",
+      "day": 1783296000,
+      "samples": 2,
+      "errors": 1,
+      "result_count_total": 8,
+      "median_latency_ms": 400,
+      "error_rate": 0.5
+    }
+  ]
+}
+```
+
 ### `GET /api/v3/shadow-evaluation`
 
 Returns the last 30 days of persisted, aggregate-only Shadow policy observations. Query text, request IDs, scores, and provider attempts are never stored or exposed. The DTO is:

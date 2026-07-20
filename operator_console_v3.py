@@ -292,6 +292,63 @@ def build_shadow_evaluation(
     return payload
 
 
+PROVIDER_HEALTH_MAX_DAYS = 30
+
+
+def build_provider_health(
+    store: SQLiteStateStore, *, days: int = 7
+) -> dict[str, Any]:
+    """Build per-provider daily health trends from persisted adaptive samples.
+
+    Aggregates only what the state store already contains: provider ids,
+    sample times, latencies, result counts, and error flags. No queries, no
+    URLs, no provider calls.
+    """
+    bounded_days = max(1, min(int(days), PROVIDER_HEALTH_MAX_DAYS))
+    rows: list[dict[str, Any]] = []
+    samples = store.adaptive_sample_rows()
+    newest_ts = max((sample_time for _, sample_time, _, _, _ in samples), default=0)
+    cutoff = newest_ts - bounded_days * 86400
+    buckets: dict[tuple[str, int], dict[str, Any]] = {}
+    for provider, sample_time, latency_ms, result_count, error in samples:
+        if provider not in PROVIDER_SPECS or sample_time < cutoff:
+            continue
+        day_index = int(sample_time // 86400)
+        bucket = buckets.setdefault(
+            (provider, day_index),
+            {
+                "provider": provider,
+                "day": day_index * 86400,
+                "samples": 0,
+                "errors": 0,
+                "result_count_total": 0,
+                "latencies": [],
+            },
+        )
+        bucket["samples"] += 1
+        bucket["errors"] += 1 if error else 0
+        bucket["result_count_total"] += int(result_count)
+        bucket["latencies"].append(int(latency_ms))
+    for bucket in sorted(
+        buckets.values(), key=lambda item: (item["provider"], item["day"])
+    ):
+        latencies = sorted(bucket.pop("latencies"))
+        bucket["median_latency_ms"] = (
+            latencies[len(latencies) // 2] if latencies else None
+        )
+        bucket["error_rate"] = (
+            round(bucket["errors"] / bucket["samples"], 4) if bucket["samples"] else 0.0
+        )
+        rows.append(bucket)
+    payload = {
+        "schema_version": SNAPSHOT_SCHEMA_VERSION,
+        "days": bounded_days,
+        "buckets": rows,
+    }
+    privacy.assert_operator_payload_safe(payload)
+    return payload
+
+
 def _provider_rows(
     config: Mapping[str, Any],
     provider_ids: Sequence[str],
