@@ -601,6 +601,42 @@ class SQLiteStateStore:
             int(row["reserved_units"]),
         )
 
+    def read_budget_snapshot(
+        self, scope: str, window_key: str
+    ) -> BudgetRecord | None:
+        """Read an optional ledger row without creating or updating state.
+
+        Callers that require a zero-write read must obtain the store through
+        :meth:`open_readonly`; a missing row is distinct from an unavailable
+        database so policy can fail closed only when necessary.
+        """
+        if not self._available:
+            return None
+        try:
+            connection = self._connect()
+            try:
+                row = connection.execute(
+                    """
+                    SELECT limit_units, used_units, reserved_units
+                    FROM budget_ledger WHERE scope=? AND window_key=?
+                    """,
+                    (scope, window_key),
+                ).fetchone()
+            finally:
+                connection.close()
+        except sqlite3.Error:
+            self._available = False
+            return None
+        if row is None:
+            return None
+        return BudgetRecord(
+            scope,
+            window_key,
+            int(row["limit_units"]),
+            int(row["used_units"]),
+            int(row["reserved_units"]),
+        )
+
     def record_shadow_evaluation(
         self,
         *,

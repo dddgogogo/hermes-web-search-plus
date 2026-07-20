@@ -91,6 +91,21 @@ _ENUM_VALUES = {
     },
     "search": {"collected", "not_collected"},
     "extract": {"collected", "not_collected"},
+    "action": {
+        "excluded", "reranked", "demoted", "selected_as_representative",
+        "truncated_by_limit", "budget_preflight", "degrade", "abort",
+    },
+    "reason": {
+        "spam_domain", "intent_authority", "domain_diversity",
+        "dedup_representative", "max_results", "max_content_bytes",
+        "max_context_chars", "degraded", "aborted",
+        "daily_quota_exhausted", "budget_ledger_unavailable",
+        "budget_unsatisfiable",
+    },
+    "check": {
+        "provider_call_cap", "daily_quota", "timeout_budget", "context_budget",
+    },
+    "verdict": {"ok", "exceeded"},
 }
 _PROVIDER_FIELDS = {
     "provider",

@@ -298,6 +298,7 @@ _DECISION_REASONS = {
     CandidateDecision.NOT_ATTEMPTED: {
         CandidateReasonCode.PROVIDER_UNAVAILABLE,
         CandidateReasonCode.NOT_ATTEMPTED_AFTER_SUCCESS,
+        CandidateReasonCode.BUDGET_DENIED,
     },
     CandidateDecision.ORIGIN_SELECTED: {
         CandidateReasonCode.CACHE_ORIGIN_SELECTED,
@@ -331,6 +332,10 @@ def complete_routing_receipt_v3(
     completed = dict(receipt)
     order = [str(provider) for provider in receipt.get("candidate_order") or []]
     selected = receipt.get("selected_provider")
+    preflight = receipt.get("budget_preflight")
+    preflight_aborted = (
+        isinstance(preflight, dict) and preflight.get("action") == "abort"
+    )
     attempts_by_provider = {item.provider: item for item in attempts}
     decisions = []
     selected_seen = False
@@ -399,7 +404,9 @@ def complete_routing_receipt_v3(
             selected_seen = True
         else:
             reason = (
-                CandidateReasonCode.NOT_ATTEMPTED_AFTER_SUCCESS
+                CandidateReasonCode.BUDGET_DENIED
+                if preflight_aborted
+                else CandidateReasonCode.NOT_ATTEMPTED_AFTER_SUCCESS
                 if selected_seen
                 else CandidateReasonCode.PROVIDER_UNAVAILABLE
             )
@@ -512,6 +519,7 @@ def validate_routing_receipt_v3(
     }
     if not base_fields.issubset(receipt):
         raise ValueError("routing_receipt is missing frozen required fields")
+    _validate_budget_preflight_receipt(receipt.get("budget_preflight"))
     present = _COMPLETED_RECEIPT_FIELDS.intersection(receipt)
     if not present and not require_completed:
         return
@@ -705,6 +713,76 @@ def validate_routing_receipt_v3(
             raise ValueError("extended shadow observation must be typed")
 
 
+_BUDGET_PREFLIGHT_CHECKS = {
+    "provider_call_cap",
+    "daily_quota",
+    "timeout_budget",
+    "context_budget",
+}
+_BUDGET_PREFLIGHT_REASONS = {
+    "daily_quota_exhausted",
+    "budget_ledger_unavailable",
+    "budget_unsatisfiable",
+}
+_BUDGET_PREFLIGHT_ADJUSTMENTS = {
+    "max_provider_calls",
+    "timeout_seconds",
+    "context_limit",
+}
+
+
+def _validate_budget_preflight_receipt(value: Any) -> None:
+    """Validate the compact, typed receipt extension without free text."""
+    if value is None:
+        return
+    if not isinstance(value, dict):
+        raise ValueError("budget_preflight receipt must be an object")
+    action = value.get("action")
+    required = {"action", "checks"}
+    if action == "degrade":
+        required.add("adjustments")
+    elif action == "abort":
+        required.add("reason")
+    else:
+        raise ValueError("budget_preflight receipt action is invalid")
+    if set(value) != required:
+        raise ValueError("budget_preflight receipt fields are invalid")
+    checks = value["checks"]
+    if not isinstance(checks, list) or len(checks) != len(_BUDGET_PREFLIGHT_CHECKS):
+        raise ValueError("budget_preflight receipt checks are invalid")
+    seen = set()
+    for check in checks:
+        if not isinstance(check, dict) or set(check) != {
+            "check", "limit", "observed", "verdict"
+        }:
+            raise ValueError("budget_preflight check fields are invalid")
+        name = check["check"]
+        if name not in _BUDGET_PREFLIGHT_CHECKS or name in seen:
+            raise ValueError("budget_preflight check name is invalid")
+        seen.add(name)
+        for scalar in ("limit", "observed"):
+            item = check[scalar]
+            if item is not None and (
+                isinstance(item, bool) or not isinstance(item, int) or item < 0
+            ):
+                raise ValueError("budget_preflight check scalar is invalid")
+        if check["verdict"] not in {"ok", "exceeded"}:
+            raise ValueError("budget_preflight verdict is invalid")
+    if action == "degrade":
+        adjustments = value["adjustments"]
+        if not isinstance(adjustments, dict) or not adjustments:
+            raise ValueError("budget_preflight adjustments are invalid")
+        if not set(adjustments) <= _BUDGET_PREFLIGHT_ADJUSTMENTS:
+            raise ValueError("budget_preflight adjustment name is invalid")
+        if any(
+            isinstance(item, bool) or not isinstance(item, int) or item < 1
+            for item in adjustments.values()
+        ):
+            raise ValueError("budget_preflight adjustment value is invalid")
+    elif value["reason"] not in _BUDGET_PREFLIGHT_REASONS:
+        raise ValueError("budget_preflight reason is invalid")
+
+
 @dataclass(frozen=True)
 class RequestV3:
     capability: Capability
@@ -862,6 +940,7 @@ _POLICY_ACTION_REASONS = {
     "truncated_by_limit": {
         "max_results", "max_content_bytes", "max_context_chars",
     },
+    "budget_preflight": {"degraded", "aborted"},
 }
 _BASE64_IMAGE_RE = re.compile(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+")
 
@@ -1044,7 +1123,10 @@ class ResponseV3:
             reasons = _POLICY_ACTION_REASONS.get(str(action.get("action")))
             if reasons is None or action.get("reason") not in reasons:
                 raise ValueError("invalid policy action/reason combination")
-            if action.get("observation_id") not in observations:
+            if action.get("action") == "budget_preflight":
+                if action.get("observation_id") is not None:
+                    raise ValueError("budget preflight action cannot reference observation")
+            elif action.get("observation_id") not in observations:
                 raise ValueError("policy action references missing observation")
         extract_limits = self.limits_applied.get("extract")
         if extract_limits is not None:

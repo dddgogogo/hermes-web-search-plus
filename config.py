@@ -71,6 +71,16 @@ DEFAULT_CONFIG = {
         # when this ceiling is explicitly changed to "shadow".
         "policy_mode": "classic",
     },
+    "budget_preflight": {
+        # Disabled and unbounded by default: existing requests keep their
+        # exact routing and execution behaviour until an operator opts in.
+        "enabled": False,
+        "max_provider_calls_per_request": None,
+        "max_daily_provider_calls": None,
+        "max_timeout_seconds": None,
+        "max_context_chars": None,
+        "on_exceed": "degrade",
+    },
     "web": {
         # Maximum cleaned characters returned inline per extracted result before
         # truncate-and-store keeps the full text on disk for page-on-demand.
@@ -298,6 +308,35 @@ def _validate_runtime_config(config: Dict[str, Any]) -> Dict[str, Any]:
     if policy_mode not in {"classic", "shadow"}:
         raise ValueError("routing.policy_mode must be classic or shadow")
     routing["policy_mode"] = policy_mode
+    budget_preflight = config.get(
+        "budget_preflight", dict(DEFAULT_CONFIG["budget_preflight"])
+    )
+    if not isinstance(budget_preflight, dict):
+        raise ValueError("budget_preflight must be an object")
+    if not isinstance(budget_preflight.get("enabled"), bool):
+        raise ValueError("budget_preflight.enabled must be a boolean")
+    for name in (
+        "max_provider_calls_per_request",
+        "max_daily_provider_calls",
+        "max_timeout_seconds",
+        "max_context_chars",
+    ):
+        value = budget_preflight.get(name)
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 1
+        ):
+            raise ValueError(
+                f"budget_preflight.{name} must be a positive integer or null"
+            )
+    if budget_preflight.get("max_context_chars") not in (None,) and (
+        budget_preflight["max_context_chars"] < 1000
+        or budget_preflight["max_context_chars"] > 200000
+    ):
+        raise ValueError(
+            "budget_preflight.max_context_chars must be between 1000 and 200000"
+        )
+    if budget_preflight.get("on_exceed") not in {"degrade", "abort"}:
+        raise ValueError("budget_preflight.on_exceed must be degrade or abort")
     bounded = config.get(
         "bounded_context", dict(DEFAULT_CONFIG["bounded_context"])
     )
@@ -325,6 +364,7 @@ def _validate_runtime_config(config: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("bounded_context.cache_root must be a non-empty string")
     config["auto_routing"] = auto
     config["routing"] = routing
+    config["budget_preflight"] = budget_preflight
     config["bounded_context"] = bounded
     return config
 

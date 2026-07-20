@@ -4,6 +4,7 @@ import hashlib
 import ipaddress
 import os
 import socket
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -56,6 +57,24 @@ from state_store_v3 import SQLiteStateStore
 
 
 EXTRACT_PROVIDER_PRIORITY = list(EXTRACT_PROVIDER_IDS)
+
+
+def _daily_preflight_budget(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the optional global provider-call ledger settings for attempts."""
+    raw_off = os.environ.get("WSP_BUDGET_PREFLIGHT_OFF")
+    if raw_off is not None and raw_off.strip().strip('"').strip("'").lower() not in {
+        "", "0", "false", "no", "off",
+    }:
+        return {}
+    section = config.get("budget_preflight") or {}
+    limit = section.get("max_daily_provider_calls") if isinstance(section, dict) else None
+    if section.get("enabled") is not True or isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        return {}
+    return {
+        "daily_budget_scope": "daily_provider_calls",
+        "daily_budget_window": time.strftime("%Y-%m-%d", time.gmtime()),
+        "daily_budget_limit_units": limit,
+    }
 
 
 def resolve_extract_provider_priority(config: Optional[Dict[str, Any]] = None) -> List[str]:
@@ -330,6 +349,15 @@ def _execute_extract_v3(
     fallback_errors = []
     payload = None
     successful_provider = None
+    max_wall_time_ms = request.budget.get("max_wall_time_ms")
+    deadline = (
+        time.monotonic() + (max_wall_time_ms / 1000)
+        if isinstance(max_wall_time_ms, int)
+        and not isinstance(max_wall_time_ms, bool)
+        and max_wall_time_ms > 0
+        else None
+    )
+    daily_budget = _daily_preflight_budget(config)
 
     for provider in plan.candidate_order:
         provider_config = config.get(provider) or {}
@@ -348,10 +376,17 @@ def _execute_extract_v3(
             budget_scope=scope,
             budget_window="request",
             budget_limit_units=budget_limit,
+            deadline_monotonic=deadline,
+            **daily_budget,
         )
         if payload is not None:
             receipts.append(
                 engine.skip(context, SkipReason.POLICY_EXCLUDED).receipt
+            )
+            continue
+        if deadline is not None and time.monotonic() >= deadline:
+            receipts.append(
+                engine.skip(context, SkipReason.DEADLINE_EXCEEDED).receipt
             )
             continue
 

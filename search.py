@@ -1719,6 +1719,24 @@ def _plan_search_v3(request: RequestV3, config: Dict[str, Any]) -> ProviderPlan:
     return ProviderPlan(tuple(candidates), selected, routing_metadata=dict(routed))
 
 
+def _daily_preflight_budget(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the optional global provider-call ledger settings for attempts."""
+    raw_off = os.environ.get("WSP_BUDGET_PREFLIGHT_OFF")
+    if raw_off is not None and raw_off.strip().strip('"').strip("'").lower() not in {
+        "", "0", "false", "no", "off",
+    }:
+        return {}
+    section = config.get("budget_preflight") or {}
+    limit = section.get("max_daily_provider_calls") if isinstance(section, dict) else None
+    if section.get("enabled") is not True or isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        return {}
+    return {
+        "daily_budget_scope": "daily_provider_calls",
+        "daily_budget_window": time.strftime("%Y-%m-%d", time.gmtime()),
+        "daily_budget_limit_units": limit,
+    }
+
+
 def _search_args_from_v3(request: RequestV3, config: Dict[str, Any]):
     options = request.options
     routing_request = request.routing
@@ -1812,6 +1830,7 @@ def _execute_research_v3(
     payloads_by_provider: Dict[str, Dict[str, Any]] = {}
     operation_started: Dict[str, Tuple[float, float]] = {}
     timed_out_providers: set[str] = set()
+    daily_budget = _daily_preflight_budget(config)
 
     for provider in providers:
         provider_config = config.get(provider) or {}
@@ -1830,6 +1849,7 @@ def _execute_research_v3(
             budget_scope=scope,
             budget_window="request",
             budget_limit_units=budget_limit,
+            **daily_budget,
         )
 
     def execute_provider(provider: str) -> Dict[str, Any]:
@@ -1864,6 +1884,17 @@ def _execute_research_v3(
         return attempted.payload
 
     args = _search_args_from_v3(request, config)
+    time_budget_seconds = float(
+        request.options.get("research_time_budget")
+        or getattr(args, "research_time_budget", 55.0)
+    )
+    max_wall_time_ms = request.budget.get("max_wall_time_ms")
+    if (
+        isinstance(max_wall_time_ms, int)
+        and not isinstance(max_wall_time_ms, bool)
+        and max_wall_time_ms > 0
+    ):
+        time_budget_seconds = min(time_budget_seconds, max_wall_time_ms / 1000)
     payload = run_research_mode(
         query=str(request.input.get("query") or ""),
         research_providers=providers,
@@ -1875,10 +1906,7 @@ def _execute_research_v3(
         ),
         max_results=int(request.options.get("max_results") or 5),
         max_extract_urls=int(getattr(args, "research_extract_count", 3) or 3),
-        time_budget_seconds=float(
-            request.options.get("research_time_budget")
-            or getattr(args, "research_time_budget", 55.0)
-        ),
+        time_budget_seconds=time_budget_seconds,
         on_provider_timeout=timed_out_providers.add,
     )
     extraction_error = str(
@@ -1983,6 +2011,15 @@ def _execute_search_v3(
     payload = None
     successful_provider = None
     scope = request.request_id or plan.execution_id
+    daily_budget = _daily_preflight_budget(config)
+    max_wall_time_ms = request.budget.get("max_wall_time_ms")
+    deadline = (
+        time.monotonic() + (max_wall_time_ms / 1000)
+        if isinstance(max_wall_time_ms, int)
+        and not isinstance(max_wall_time_ms, bool)
+        and max_wall_time_ms > 0
+        else None
+    )
 
     for provider in plan.candidate_order:
         provider_config = config.get(provider) or {}
@@ -2001,10 +2038,17 @@ def _execute_search_v3(
             budget_scope=scope,
             budget_window="request",
             budget_limit_units=budget_limit,
+            deadline_monotonic=deadline,
+            **daily_budget,
         )
         if payload is not None:
             receipts.append(
                 engine.skip(context, SkipReason.POLICY_EXCLUDED).receipt
+            )
+            continue
+        if deadline is not None and time.monotonic() >= deadline:
+            receipts.append(
+                engine.skip(context, SkipReason.DEADLINE_EXCEEDED).receipt
             )
             continue
 

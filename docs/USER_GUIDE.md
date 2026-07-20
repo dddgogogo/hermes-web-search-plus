@@ -167,6 +167,25 @@ Semantics worth knowing:
 - `set-auto-allow <provider> off` keeps a configured provider available for explicit calls while preventing auto-routing/fallback from selecting it.
 - `config reset --yes` backs up the existing file before writing fresh defaults.
 
+## V3 budget preflight
+
+Budget preflight is opt-in. Before a native v3 request starts any provider attempt, it can cap the provider-call fan-out, request wall-time budget, extraction context, and the current UTC day's provider-call ledger. The default is disabled and all limits are unbounded, so existing requests are unchanged.
+
+```json
+{
+  "budget_preflight": {
+    "enabled": true,
+    "max_provider_calls_per_request": 2,
+    "max_daily_provider_calls": 100,
+    "max_timeout_seconds": 30,
+    "max_context_chars": 30000,
+    "on_exceed": "degrade"
+  }
+}
+```
+
+Set a limit to `null` to leave that dimension unbounded. With `on_exceed: "degrade"`, WSP deterministically applies the smallest compatible cap; with `"abort"`, it returns a typed budget failure before a provider call. Daily usage is checked and recorded in the existing local v3 `budget_ledger`; an unavailable ledger fails closed when a daily quota is enabled. The receipt endpoint includes the typed checks and any reduction or abort reason. Set `WSP_BUDGET_PREFLIGHT_OFF=1` for an emergency process-level override; `0`, `false`, `no`, and `off` leave configured preflight enabled.
+
 ### GroktoCrawl / local Firecrawl-compatible backends
 
 Firecrawl search and extraction use configurable endpoint URLs. If you run a local Firecrawl-v2-compatible service such as [GroktoCrawl](https://github.com/groktopus/groktocrawl), point the existing `firecrawl` provider at that service instead of adding a new provider name:
