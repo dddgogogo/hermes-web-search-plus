@@ -88,3 +88,22 @@ def test_evaluator_is_side_effect_free_for_plan_and_config(monkeypatch) -> None:
     assert observation["agreement"] is True
     assert config == original_config
     assert plan.routing_metadata == original_metadata
+
+
+def test_legacy_request_projection_propagates_config_policy_mode() -> None:
+    from compat_v3 import legacy_request_to_v3
+    from contract_v3 import Capability
+
+    default = legacy_request_to_v3(Capability.SEARCH, {"query": "q"})
+    assert default.routing["policy_mode"] == "classic"
+
+    shadow = legacy_request_to_v3(
+        Capability.SEARCH, {"query": "q"}, policy_mode="shadow"
+    )
+    assert shadow.routing["policy_mode"] == "shadow"
+
+    # Unknown values fail closed to Classic rather than propagating.
+    other = legacy_request_to_v3(
+        Capability.SEARCH, {"query": "q"}, policy_mode="canary"
+    )
+    assert other.routing["policy_mode"] == "classic"

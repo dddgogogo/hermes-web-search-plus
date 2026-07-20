@@ -14,6 +14,7 @@ def legacy_request_to_v3(
     payload: Mapping[str, Any],
     *,
     request_id: str | None = None,
+    policy_mode: str = "classic",
 ) -> RequestV3:
     """Project a public legacy invocation into a complete RequestV3."""
     capability = Capability(capability)
@@ -23,7 +24,7 @@ def legacy_request_to_v3(
         "mode": "auto" if provider == "auto" else "fixed",
         "provider": provider,
         "allow_fallback": bool(payload.get("allow_fallback", default_fallback)),
-        "policy_mode": "classic",
+        "policy_mode": policy_mode if policy_mode == "shadow" else "classic",
     }
     cache = {
         "mode": "bypass" if payload.get("no_cache") else "prefer",

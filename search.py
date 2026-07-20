@@ -2132,9 +2132,11 @@ def run_search_request(
     except ValueError as exc:
         return {"error": str(exc), "provider": provider, "query": query, "results": []}
     config = config or load_config()
+    policy_mode = str((config.get("routing") or {}).get("policy_mode", "classic"))
     request = legacy_request_to_v3(
         Capability.SEARCH,
-        {
+        policy_mode=policy_mode,
+        payload={
             "query": query,
             "provider": provider or "auto",
             "count": count,
