@@ -750,7 +750,24 @@ def _extract_cache_write_eligible(
     _config: Dict[str, Any],
 ) -> bool:
     """Avoid lossy cache projections for partial or provider-specific payloads."""
-    if set(legacy_payload) - {"provider", "results", "routing"}:
+    # Per-execution provider metadata (upstream request ids, cost accounting,
+    # upstream cache statuses) describes ONE live execution. It is never part
+    # of the cached evidence and never reproduced on hits, so its presence
+    # must not disqualify a write. Everything else unknown stays a blocker.
+    execution_metadata_fields = {"request_id", "cost_dollars", "statuses"}
+    if set(legacy_payload) - {"provider", "results", "routing"} - execution_metadata_fields:
+        return False
+    if "request_id" in legacy_payload and not isinstance(
+        legacy_payload.get("request_id"), str
+    ):
+        return False
+    if "cost_dollars" in legacy_payload and not isinstance(
+        legacy_payload.get("cost_dollars"), dict
+    ):
+        return False
+    if "statuses" in legacy_payload and not isinstance(
+        legacy_payload.get("statuses"), list
+    ):
         return False
     routing = legacy_payload.get("routing")
     if routing is not None:

@@ -45,6 +45,13 @@ An extraction result is not written when a lossless canonical reconstruction can
 
 These rules only bypass reading/writing for the affected request shape; they do not change provider execution or legacy response projection.
 
+Per-execution provider metadata at the top level of the legacy payload —
+upstream `request_id`, `cost_dollars` accounting, and upstream `statuses` —
+describes one live execution only. It never disqualifies a write, is never
+stored in the cache material, and is never reproduced on a hit: a cache hit
+carries WSP cache-origin evidence instead of the origin execution's upstream
+metadata.
+
 ## Miss and corruption semantics
 
 - A key or identity mismatch is an ordinary cache miss.

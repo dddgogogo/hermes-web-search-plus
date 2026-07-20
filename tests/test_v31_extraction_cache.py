@@ -445,6 +445,13 @@ def test_realistic_exa_result_shape_writes_and_hits_the_cache(
         return {
             "provider": "exa",
             "results": [dict(exa_result)],
+            # Full live top-level shape: per-execution provider metadata must
+            # not block the write (release-gate regression).
+            "request_id": f"live-request-{calls}",
+            "cost_dollars": {"total": 0.001, "contents": {"text": 0.001}},
+            "statuses": [
+                {"id": exa_result["url"], "status": "success", "source": "cached"}
+            ],
             "routing": {
                 "provider": "exa",
                 "requested_provider": "auto",
@@ -467,6 +474,8 @@ def test_realistic_exa_result_shape_writes_and_hits_the_cache(
 
     assert calls == 1, "identical realistic request must be served from cache"
     assert second.cache_status.get("disposition") == "fresh_hit"
+    assert second.cache_status.get("origin_execution_id") == first.execution_id
+    assert second.provider_attempts == []
     assert first.results and second.results
     hit_result = second.results[0]
     assert hit_result["url"]["observed"] == exa_result["url"]
