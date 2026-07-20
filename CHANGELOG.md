@@ -8,6 +8,9 @@
 - Added deterministic Diversity Score diagnostics for quality reports: registrable-domain coverage, canonical-URL duplication, near-duplicate snippets, and research-provider mix. Research-result reranking remains explicitly opt-in.
 - Added the versioned v3 extraction-cache identity contract: request-exact URL, budget, bounded-context, extraction-control, provider-endpoint, URL-policy and retained-storage variation; lossless extraction provenance/legacy alias round-trips; and fail-closed identity-version and corrupt-entry quarantine handling.
 
+### ⚠️ Deprecated
+- The legacy pre-v3 execution modules (`cache.py` search-response caching and the non-v3 projection paths they serve) are deprecated. All public tools already execute through the native v3 orchestrator; the legacy modules remain only as compatibility shims and are planned for removal no earlier than 3.2. Operators do not need to change anything — this is an advance notice, not a behavior change.
+
 ## [v3.0.2] — 2026-07-14
 
 ### Credits
