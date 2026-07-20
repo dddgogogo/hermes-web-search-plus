@@ -52,11 +52,14 @@ from cache import (
 from config import (  # noqa: F401 - re-exported for backward-compatible tests/imports
     DEFAULT_CONFIG,
     ProviderConfigError,
+    SELF_HOSTED_SEARCH_PROVIDER_IDS,
     _clean_env_value,
     _deepcopy_default_config,
     _validate_runtime_config,
     _validate_searxng_url,
+    apply_profile_effects,
     get_api_key,
+    is_self_hosted_profile,
     keyless_public_allowed,
     load_config,
     provider_configured,
@@ -977,7 +980,7 @@ Full docs: See README.md and SKILL.md
     searxng_config = config.get("searxng", {})
     parser.add_argument(
         "--searxng-url",
-        default=searxng_config.get("instance_url"),
+        default=searxng_config.get("base_url") or searxng_config.get("instance_url"),
         help="SearXNG instance URL (e.g., https://searx.example.com)"
     )
     parser.add_argument(
@@ -1349,10 +1352,21 @@ def _execute_search_request_core(args, config: Dict[str, Any]) -> Tuple[Dict[str
     prints or calls ``sys.exit`` so the Hermes plugin can invoke it in-process
     instead of spawning a subprocess.
     """
+    config = apply_profile_effects(config)
+
     # Determine provider
     if args.provider == "auto" or (args.provider is None and not args.similar_url):
         if args.query:
             routing = auto_route_provider(args.query, config)
+            if routing.get("error_type"):
+                return {
+                    "error": routing["error"],
+                    "error_type": routing["error_type"],
+                    "provider": "auto",
+                    "query": args.query,
+                    "results": [],
+                    "metadata": {"profile": config.get("profile")},
+                }, 1
             provider = routing["provider"]
             routing_info = {
                 "auto_routed": True,
@@ -1379,6 +1393,11 @@ def _execute_search_request_core(args, config: Dict[str, Any]) -> Tuple[Dict[str
     else:
         provider = args.provider or "serper"
         routing_info = {"auto_routed": False, "provider": provider, "routing_policy": ROUTING_POLICY}
+    profile_deviation = (
+        is_self_hosted_profile(config)
+        and args.provider not in (None, "auto")
+        and provider not in SELF_HOSTED_SEARCH_PROVIDER_IDS
+    )
     
     # Build provider fallback list
     auto_config = config.get("auto_routing", {})
@@ -1656,6 +1675,9 @@ def _execute_search_request_core(args, config: Dict[str, Any]) -> Tuple[Dict[str
             )
             result.setdefault("metadata", {})["locale"] = locale_meta
 
+        if profile_deviation:
+            result.setdefault("metadata", {})["profile_deviation"] = True
+
         if (
             not cache_hit
             and not args.no_cache
@@ -1708,11 +1730,17 @@ def execute_search_request(args, config: Dict[str, Any]) -> Tuple[Dict[str, Any]
 
 
 def _plan_search_v3(request: RequestV3, config: Dict[str, Any]) -> ProviderPlan:
+    config = apply_profile_effects(config)
     routing_request = request.routing
     requested = str(routing_request.get("provider") or "auto")
     auto_config = config.get("auto_routing", {})
     if requested == "auto":
         routed = auto_route_provider(request.input["query"], config)
+        if routed.get("error_type"):
+            # ProviderPlan is intentionally non-empty even for a local
+            # preflight error; execution returns before this placeholder can
+            # be contacted.
+            return ProviderPlan(("keenable",), "keenable", routing_metadata=dict(routed))
         selected = str(routed["provider"])
     else:
         selected = requested
@@ -2024,6 +2052,19 @@ def _execute_research_v3(
 def _execute_search_v3(
     request: RequestV3, plan: ProviderPlan, config: Dict[str, Any]
 ) -> CapabilityExecution:
+    profile_error = plan.routing_metadata.get("error_type")
+    if profile_error:
+        return CapabilityExecution(
+            payload={
+                "error": plan.routing_metadata.get("error"),
+                "error_type": profile_error,
+                "provider": "auto",
+                "query": request.input["query"],
+                "results": [],
+                "metadata": {"profile": config.get("profile")},
+            },
+            stages=("admission",),
+        )
     if str(request.options.get("mode") or "normal") == "research":
         return _execute_research_v3(request, plan, config)
     v3_config = config.get("v3") or {}
@@ -2174,7 +2215,7 @@ def run_search_request_v3(
     config: Optional[Dict[str, Any]] = None,
 ) -> ResponseV3:
     """Execute a native search RequestV3 through the canonical orchestrator."""
-    runtime_config = config or load_config()
+    runtime_config = apply_profile_effects(config) if config is not None else load_config()
     return execute_v3_request(request, _search_adapter(), runtime_config).response
 
 
@@ -2209,7 +2250,7 @@ def run_search_request(
         search_type = _providers.normalize_search_type(search_type)
     except ValueError as exc:
         return {"error": str(exc), "provider": provider, "query": query, "results": []}
-    config = config or load_config()
+    config = apply_profile_effects(config) if config is not None else load_config()
     policy_mode = str((config.get("routing") or {}).get("policy_mode", "classic"))
     request = legacy_request_to_v3(
         Capability.SEARCH,
