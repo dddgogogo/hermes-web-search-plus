@@ -251,7 +251,7 @@ def test_reconcile_degrades_if_sqlite_fails_after_reservation(
 
 def test_schema_initialization_is_idempotent_and_uses_wal(tmp_path):
     path = tmp_path / "state.sqlite3"
-    SQLiteStateStore(path)
+    store = SQLiteStateStore(path)
     SQLiteStateStore(path)
 
     connection = sqlite3.connect(path)
@@ -263,6 +263,16 @@ def test_schema_initialization_is_idempotent_and_uses_wal(tmp_path):
 
     assert mode.lower() == "wal"
     assert version == SCHEMA_VERSION
+
+    no_checkpoint_on_close = getattr(
+        sqlite3, "SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE", None
+    )
+    if no_checkpoint_on_close is not None and hasattr(connection, "getconfig"):
+        owned_connection = store._connect()
+        try:
+            assert owned_connection.getconfig(no_checkpoint_on_close) is True
+        finally:
+            owned_connection.close()
 
 
 def test_schema_v3_upgrades_v2_in_place_without_losing_existing_data(tmp_path):

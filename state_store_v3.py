@@ -240,6 +240,23 @@ class SQLiteStateStore:
             )
         else:
             connection = sqlite3.connect(self.path, timeout=5, isolation_level=None)
+        # This store intentionally uses short-lived WAL connections from
+        # concurrent research workers.  SQLite normally checkpoints WAL when
+        # the apparent last connection closes, which requires an exclusive
+        # lock and can deadlock with another thread opening a connection.
+        # Normal WAL auto-checkpointing still bounds the journal without doing
+        # blocking persistence work during request teardown.
+        no_checkpoint_on_close = getattr(
+            sqlite3, "SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE", None
+        )
+        setconfig = getattr(connection, "setconfig", None)
+        if no_checkpoint_on_close is not None and setconfig is not None:
+            try:
+                setconfig(no_checkpoint_on_close, True)
+            except sqlite3.Error:
+                # Older SQLite builds may expose the Python API without this
+                # option; state access must retain its existing degradation.
+                pass
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA busy_timeout=5000")
         return connection

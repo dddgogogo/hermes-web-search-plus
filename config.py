@@ -80,6 +80,7 @@ DEFAULT_CONFIG = {
         "max_timeout_seconds": None,
         "max_context_chars": None,
         "on_exceed": "degrade",
+    },
     "quality": {
         # Diversity diagnostics are always safe to calculate.  Reordering
         # research results is separately opt-in so the default remains an
