@@ -35,6 +35,20 @@ It adds two Hermes tools:
 
 Read the full [3.0 Release Notes](docs/RELEASE_NOTES_V3.md) for compatibility details and deliberate 3.1 deferrals.
 
+## What 3.1 adds
+
+3.1 ships everything 3.0 deferred, plus the quality and budget layers around it. Defaults stay bit-identical to 3.0.2 — every feature is opt-in.
+
+- **Full Shadow Observer.** A deterministic shadow routing policy runs beside Classic, persists its would-be decisions (never query text), and reports agreement and divergences in the Console — without ever affecting execution.
+- **Budget Preflight.** Call caps, daily quota, timeout and context budgets are checked before the first provider call; violations degrade deterministically or abort with a typed error instead of spending money first.
+- **Diversity Score.** Quality reports measure domain, URL, and content diversity, so ten variants of the same SEO page stop looking like ten sources. Research reranking stays opt-in.
+- **Extraction cache identity.** Request-exact, versioned cache identity with per-field provenance and fail-closed miss semantics — no wrong hits after endpoint, budget, or config changes.
+- **Self-hosted profile.** `profile: self_hosted` runs automatic routing on SearXNG and keyless Keenable only — no commercial API keys required.
+- **Semantic spans.** Opt-in query-conditioned passages on extraction with a mechanical offset contract (NFC, codepoints, half-open ranges).
+- **Public Provider SDK.** New providers are one self-contained `providers.d` module — zero core-file edits — with scaffolding and a conformance suite.
+
+Read the full [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) and [3.1 Migration](docs/V31_MIGRATION.md) for details.
+
 ---
 
 ## Quick Start
@@ -108,6 +122,9 @@ Full parameters, freshness and locale behavior, provider selection, extraction c
 ### Start & upgrade
 
 - [User Guide](docs/USER_GUIDE.md) — installation, first-run checks, tool usage, and troubleshooting
+- [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) — highlights, compatibility, and 3.2 deferrals
+- [3.1 Migration](docs/V31_MIGRATION.md) — opt-in matrix, kill switches, verification, and rollback
+- [Provider SDK](docs/PROVIDER_SDK.md) — add a provider with one `providers.d` module
 - [3.0 Release Notes](docs/RELEASE_NOTES_V3.md) — highlights, provider changes, compatibility, and 3.1 deferrals
 - [3.0 Migration](docs/V3_MIGRATION.md) — dry run, apply, smoke tests, and rollback
 - [3.0 Compatibility](docs/V3_COMPATIBILITY.md) and [Backup & Restore](docs/V3_BACKUP_RESTORE.md) — stable surfaces and recovery behavior
