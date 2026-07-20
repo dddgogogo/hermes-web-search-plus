@@ -11,12 +11,17 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.parse import urlsplit, urlunsplit
 
+from cache_identity_v3 import (
+    EXTRACTION_CACHE_IDENTITY_VERSION,
+    ExtractionCacheIdentityV3,
+)
 from contract_v3 import RequestV3, cache_hit_routing_receipt_v3
 
 
 CACHE_SCHEMA_VERSION = 3
 CACHE_OWNER = "web-search-plus:v3"
 NORMALIZER_VERSION = "runtime-v3-amendment-002"
+_EXTRACTION_IDENTITY_VARY_KEY = "extraction_cache_identity"
 
 
 @dataclass(frozen=True)
@@ -190,6 +195,11 @@ def derive_cache_key(
     request: RequestV3, *, vary: Optional[Dict[str, Any]] = None
 ) -> str:
     """Hash execution semantics, deliberately excluding request/cache policy IDs."""
+    extraction_identity = _extraction_identity_from_vary(vary)
+    if extraction_identity is not None:
+        # The typed form already contains every extraction input that affects
+        # evidence. Unlike legacy v3 keys, this is the complete SHA-256.
+        return f"extract_{extraction_identity.key}"
     material = {
         "contract_version": request.contract_version,
         "capability": request.capability.value,
@@ -208,6 +218,19 @@ def derive_cache_key(
     ).encode("utf-8")
     digest = hashlib.sha256(encoded).hexdigest()[:32]
     return f"{request.capability.value}_{digest}"
+
+
+def _extraction_identity_from_vary(
+    vary: Optional[Dict[str, Any]],
+) -> ExtractionCacheIdentityV3 | None:
+    if not vary or _EXTRACTION_IDENTITY_VARY_KEY not in vary:
+        return None
+    if set(vary) != {_EXTRACTION_IDENTITY_VARY_KEY}:
+        raise ValueError("typed extraction cache identity cannot have extra vary fields")
+    raw_identity = vary[_EXTRACTION_IDENTITY_VARY_KEY]
+    if not isinstance(raw_identity, dict):
+        raise ValueError("typed extraction cache identity must be an object")
+    return ExtractionCacheIdentityV3.from_canonical_form(raw_identity)
 
 
 class ResponseCacheV3:
@@ -240,6 +263,90 @@ class ResponseCacheV3:
         return value if ResponseCacheV3._owned_envelope(value) else None
 
     @staticmethod
+    def _read_for_lookup(
+        path: Path,
+        *,
+        expected_entry_id: str,
+        extraction_identity: ExtractionCacheIdentityV3 | None,
+    ) -> tuple[str, Optional[Dict[str, Any]]]:
+        """Classify a candidate without ever treating malformed data as a hit."""
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return "missing", None
+        except (OSError, ValueError, UnicodeError):
+            return "corrupt", None
+        if not isinstance(value, dict):
+            return "corrupt", None
+        if value.get("owner") != CACHE_OWNER:
+            return "foreign", None
+        if not ResponseCacheV3._owned_envelope(value):
+            return "corrupt", None
+        if value.get("entry_id") != expected_entry_id:
+            return "corrupt", None
+        if extraction_identity is None:
+            return "valid", value
+
+        identity_version = value.get("identity_version")
+        if (
+            isinstance(identity_version, bool)
+            or not isinstance(identity_version, int)
+            or identity_version != EXTRACTION_CACHE_IDENTITY_VERSION
+        ):
+            # Previous/unknown identity versions are intact historical cache
+            # data, not corruption. They are never reinterpreted.
+            return "identity_miss", None
+        raw_identity = value.get("identity")
+        if not isinstance(raw_identity, dict):
+            return "corrupt", None
+        nested_version = raw_identity.get("identity_version")
+        if (
+            isinstance(nested_version, bool)
+            or not isinstance(nested_version, int)
+        ):
+            return "corrupt", None
+        if nested_version != EXTRACTION_CACHE_IDENTITY_VERSION:
+            return "identity_miss", None
+        try:
+            stored_identity = ExtractionCacheIdentityV3.from_canonical_form(
+                raw_identity
+            )
+        except ValueError:
+            return "corrupt", None
+        if stored_identity.canonical_form() != extraction_identity.canonical_form():
+            return "corrupt", None
+        return "valid", value
+
+    def _quarantine(self, path: Path) -> None:
+        """Move unreadable owned-path bytes aside without overwriting evidence."""
+        try:
+            data = path.read_bytes()
+        except OSError:
+            return
+        digest = hashlib.sha256(data).hexdigest()[:16]
+        capability = path.parent.name
+        quarantine = self.response_root / "quarantine" / capability
+        try:
+            quarantine.mkdir(parents=True, exist_ok=True, mode=0o700)
+        except OSError:
+            return
+        target = quarantine / f"{path.stem}.{digest}.corrupt.json"
+        suffix = 1
+        while target.exists():
+            try:
+                if target.read_bytes() == data:
+                    path.unlink(missing_ok=True)
+                    return
+            except OSError:
+                return
+            target = quarantine / f"{path.stem}.{digest}.{suffix}.corrupt.json"
+            suffix += 1
+        try:
+            os.replace(path, target)
+        except OSError:
+            return
+
+    @staticmethod
     def _atomic_write(path: Path, value: Dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd, temporary = tempfile.mkstemp(
@@ -266,6 +373,7 @@ class ResponseCacheV3:
         legacy_payload: Optional[Dict[str, Any]] = None,
         vary: Optional[Dict[str, Any]] = None,
     ) -> str:
+        extraction_identity = _extraction_identity_from_vary(vary)
         entry_id = derive_cache_key(request, vary=vary)
         envelope = {
             "owner": CACHE_OWNER,
@@ -277,6 +385,13 @@ class ResponseCacheV3:
                 payload, legacy_payload=legacy_payload
             ),
         }
+        if extraction_identity is not None:
+            envelope.update(
+                {
+                    "identity_version": extraction_identity.identity_version,
+                    "identity": extraction_identity.canonical_form(),
+                }
+            )
         self._atomic_write(self.path_for(request, vary=vary), envelope)
         return entry_id
 
@@ -290,16 +405,24 @@ class ResponseCacheV3:
         vary: Optional[Dict[str, Any]] = None,
     ) -> CacheLookupV3:
         path = self.path_for(request, vary=vary)
-        envelope = self._read(path)
+        entry_id = derive_cache_key(request, vary=vary)
+        extraction_identity = _extraction_identity_from_vary(vary)
+        read_status, envelope = self._read_for_lookup(
+            path,
+            expected_entry_id=entry_id,
+            extraction_identity=extraction_identity,
+        )
+        if read_status == "corrupt":
+            self._quarantine(path)
+            return CacheLookupV3("miss")
         if envelope is None:
             return CacheLookupV3("miss")
         created_at = envelope.get("created_at")
         if not isinstance(created_at, int):
+            self._quarantine(path)
             return CacheLookupV3("miss")
         age = max(0, int(now) - created_at)
-        entry_id = str(
-            envelope.get("entry_id") or derive_cache_key(request, vary=vary)
-        )
+        entry_id = str(envelope["entry_id"])
         if age <= max(0, int(ttl_seconds)):
             return CacheLookupV3(
                 "fresh_hit",
