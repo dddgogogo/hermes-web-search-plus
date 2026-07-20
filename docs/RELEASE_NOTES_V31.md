@@ -87,9 +87,3 @@ adaptive samples — no provider calls, no stored query text.
 - The legacy pre-v3 execution modules (`cache.py` search-response caching and
   the non-v3 projection paths) are deprecated; removal no earlier than 3.2.
   This is an advance notice only — nothing changes in 3.1.
-
-## Deliberately deferred to 3.2
-
-- Shadow-policy canary/promotion gates (act on observer data);
-- write-capable Console actions;
-- removal of the deprecated legacy modules.

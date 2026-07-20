@@ -122,7 +122,7 @@ Full parameters, freshness and locale behavior, provider selection, extraction c
 ### Start & upgrade
 
 - [User Guide](docs/USER_GUIDE.md) — installation, first-run checks, tool usage, and troubleshooting
-- [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) — highlights, compatibility, and 3.2 deferrals
+- [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) — highlights and compatibility
 - [3.1 Migration](docs/V31_MIGRATION.md) — opt-in matrix, kill switches, verification, and rollback
 - [Provider SDK](docs/PROVIDER_SDK.md) — add a provider with one `providers.d` module
 - [3.0 Release Notes](docs/RELEASE_NOTES_V3.md) — highlights, provider changes, compatibility, and 3.1 deferrals
