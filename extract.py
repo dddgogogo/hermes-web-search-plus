@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 from config import ProviderConfigError, get_api_key, keyless_public_allowed, load_config
 from cache import CACHE_DIR
+from cache_identity_v3 import ExtractionCacheIdentityV3
 from bounded_context_v3 import (
     DEFAULT_FULL_TEXT_MAX_BYTES,
     DEFAULT_FULL_TEXT_TTL_SECONDS,
@@ -520,20 +521,126 @@ def _extract_cache_identity(
     )
 
 
-def _extract_cache_vary(
-    _request: RequestV3, _provider_plan: ProviderPlan, config: Dict[str, Any]
+def _extract_provider_endpoint_config(
+    provider: str, config: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Bind mutable operator storage and URL policy to cache-owned evidence."""
+    """Return every non-secret extraction adapter setting that affects output."""
+    section = config.get(provider) or {}
+    if not isinstance(section, dict):
+        section = {}
+    if provider == "firecrawl":
+        return {
+            "scrape_url": section.get(
+                "scrape_url", "https://api.firecrawl.dev/v2/scrape"
+            ),
+            "extract_timeout": int(section.get("extract_timeout", 60)),
+        }
+    if provider == "linkup":
+        return {
+            "fetch_url": section.get("fetch_url", "https://api.linkup.so/v1/fetch"),
+            "timeout": int(section.get("timeout", 30)),
+        }
+    if provider == "tavily":
+        return {
+            "extract_url": section.get(
+                "extract_url", "https://api.tavily.com/extract"
+            ),
+            "timeout": int(section.get("timeout", 30)),
+        }
+    if provider == "exa":
+        return {
+            "contents_url": section.get("contents_url", "https://api.exa.ai/contents"),
+            "timeout": int(section.get("timeout", 30)),
+        }
+    if provider == "parallel":
+        return {
+            "extract_url": section.get(
+                "extract_url", "https://api.parallel.ai/v1/extract"
+            ),
+            "extract_timeout": int(
+                section.get("extract_timeout", section.get("timeout", 60))
+            ),
+            "client_model": section.get("client_model"),
+            "max_chars_total": int(section.get("max_chars_total", 120000)),
+            "max_chars_per_result": int(section.get("max_chars_per_result", 60000)),
+        }
+    if provider == "keenable":
+        return {
+            "fetch_url": section.get("fetch_url", "https://api.keenable.ai/v1/fetch"),
+            "timeout": int(section.get("timeout", 30)),
+            "keyless_public": keyless_public_allowed(provider, config),
+        }
+    if provider == "serper":
+        return {
+            "scrape_url": section.get("scrape_url", "https://scrape.serper.dev"),
+            "extract_timeout": int(
+                section.get("extract_timeout", section.get("timeout", 30))
+            ),
+        }
+    if provider == "you":
+        return {
+            "contents_url": section.get("contents_url", "https://ydc-index.io/v1/contents"),
+            "timeout": int(section.get("timeout", 30)),
+        }
+    # The registry is the authoritative provider boundary. An unknown provider
+    # must not be silently collapsed into a shared cache identity.
+    raise ValueError(f"unknown extraction provider in cache identity: {provider}")
+
+
+def _extract_cache_vary(
+    request: RequestV3, provider_plan: ProviderPlan, config: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Return the complete typed identity for request-exact extraction evidence."""
+    prepared = prepare_extract_request(request, config)
     policy = config.get("bounded_context") or {}
     if not isinstance(policy, dict):
         policy = {}
     cache_root = Path(policy.get("cache_root") or CACHE_DIR)
-    return {
-        "extract_url_policy": {
+    v3_config = config.get("v3") or {}
+    if not isinstance(v3_config, dict):
+        v3_config = {}
+    storage_root = os.path.abspath(os.fspath(cache_root))
+    identity = ExtractionCacheIdentityV3(
+        requested_urls=tuple(request.input["urls"]),
+        attempt_budget={
+            "requested": dict(request.budget),
+            "effective_max_provider_attempts": int(
+                request.budget.get(
+                    "max_provider_attempts",
+                    v3_config.get("default_max_provider_attempts", 3),
+                )
+            ),
+            "max_attempts_per_provider": int(
+                v3_config.get("max_attempts_per_provider", 2)
+            ),
+        },
+        effective_context_limits={
+            "max_urls": prepared.max_urls,
+            "max_context_chars": prepared.max_context_chars,
+        },
+        output_format=str(request.options.get("output_format", "markdown")),
+        include_images=bool(request.options.get("include_images", False)),
+        include_raw_html=bool(request.options.get("include_raw_html", False)),
+        render_js=bool(request.options.get("render_js", False)),
+        provider_selection={
+            "requested_provider": str(request.routing.get("provider") or "auto"),
+            "allow_fallback": bool(request.routing.get("allow_fallback", True)),
+            "selected_provider": provider_plan.selected_provider,
+            "candidate_order": list(provider_plan.candidate_order),
+        },
+        provider_endpoint_config={
+            provider: _extract_provider_endpoint_config(provider, config)
+            for provider in provider_plan.candidate_order
+        },
+        url_policy={
             "allow_private_urls": _extract_allows_private_urls(config),
         },
-        "full_text_store": {
-            "cache_root": os.path.abspath(os.fspath(cache_root)),
+        storage_policy={
+            # Retained content references are local to this store. Keep the
+            # location opaque even inside the cache envelope.
+            "cache_root_fingerprint": hashlib.sha256(
+                storage_root.encode("utf-8")
+            ).hexdigest(),
             "ttl_seconds": max(
                 0,
                 int(
@@ -547,7 +654,8 @@ def _extract_cache_vary(
                 int(policy.get("full_text_max_bytes", DEFAULT_FULL_TEXT_MAX_BYTES)),
             ),
         },
-    }
+    )
+    return {"extraction_cache_identity": identity.canonical_form()}
 
 
 def _extract_cache_write_eligible(
