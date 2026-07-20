@@ -145,7 +145,9 @@ def _validate_string(value: str, field_name: str | None, location: str) -> None:
         return
     if field_name == "policy_id" and value in {"classic", "shadow-quality"}:
         return
-    if field_name == "policy_revision" and value in {"v2.9.1", "fixture", "1", "3.1"}:
+    if field_name == "policy_revision" and value in {
+        "v2.9.1", "routing-v2", "fixture", "1", "3.1",
+    }:
         return
     raise ValueError(f"operator payload string is not known-safe at {location}")
 

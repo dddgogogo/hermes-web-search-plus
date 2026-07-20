@@ -71,6 +71,15 @@ DEFAULT_CONFIG = {
         # when this ceiling is explicitly changed to "shadow".
         "policy_mode": "classic",
     },
+    "quality": {
+        # Diversity diagnostics are always safe to calculate.  Reordering
+        # research results is separately opt-in so the default remains an
+        # exact behavioural match for existing result ordering.
+        "diversity": {
+            "rerank": False,
+            "near_duplicate_threshold": 0.6,
+        },
+    },
     "web": {
         # Maximum cleaned characters returned inline per extracted result before
         # truncate-and-store keeps the full text on disk for page-on-demand.
@@ -298,6 +307,26 @@ def _validate_runtime_config(config: Dict[str, Any]) -> Dict[str, Any]:
     if policy_mode not in {"classic", "shadow"}:
         raise ValueError("routing.policy_mode must be classic or shadow")
     routing["policy_mode"] = policy_mode
+    quality = config.get("quality", dict(DEFAULT_CONFIG["quality"]))
+    if not isinstance(quality, dict):
+        raise ValueError("quality must be an object")
+    diversity = quality.get("diversity", {})
+    if not isinstance(diversity, dict):
+        raise ValueError("quality.diversity must be an object")
+    default_diversity = DEFAULT_CONFIG["quality"]["diversity"]
+    diversity = {**default_diversity, **diversity}
+    if not isinstance(diversity["rerank"], bool):
+        raise ValueError("quality.diversity.rerank must be a boolean")
+    threshold = diversity["near_duplicate_threshold"]
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+        raise ValueError("quality.diversity.near_duplicate_threshold must be a number")
+    threshold = float(threshold)
+    if threshold < 0.0 or threshold > 1.0:
+        raise ValueError(
+            "quality.diversity.near_duplicate_threshold must be between 0.0 and 1.0"
+        )
+    diversity["near_duplicate_threshold"] = threshold
+    quality["diversity"] = diversity
     bounded = config.get(
         "bounded_context", dict(DEFAULT_CONFIG["bounded_context"])
     )
@@ -325,6 +354,7 @@ def _validate_runtime_config(config: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("bounded_context.cache_root must be a non-empty string")
     config["auto_routing"] = auto
     config["routing"] = routing
+    config["quality"] = quality
     config["bounded_context"] = bounded
     return config
 
