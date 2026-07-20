@@ -675,17 +675,34 @@ def validate_routing_receipt_v3(
             raise ValueError("cache_origin selected decision/provider mismatch")
     shadow = receipt["shadow_observation"]
     if shadow is not None:
-        shadow_fields = {
+        legacy_shadow_fields = {
             "observed", "policy_id", "policy_revision", "selected_provider",
             "affected_execution",
         }
+        extended_shadow_fields = {
+            *legacy_shadow_fields,
+            "shadow_provider",
+            "agreement",
+        }
+        shadow_keys = set(shadow) if isinstance(shadow, dict) else set()
         if (
             not isinstance(shadow, dict)
-            or set(shadow) != shadow_fields
+            or (
+                shadow_keys != legacy_shadow_fields
+                and shadow_keys != extended_shadow_fields
+            )
             or shadow["observed"] is not True
             or shadow["affected_execution"] is not False
         ):
             raise ValueError("shadow observation must be typed and observational")
+        if shadow_keys == extended_shadow_fields and (
+            not isinstance(shadow["agreement"], bool)
+            or (
+                shadow["shadow_provider"] is not None
+                and not isinstance(shadow["shadow_provider"], str)
+            )
+        ):
+            raise ValueError("extended shadow observation must be typed")
 
 
 @dataclass(frozen=True)

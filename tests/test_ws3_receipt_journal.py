@@ -256,28 +256,67 @@ def test_cache_hit_receipt_keeps_origin_separate_from_current_attempts() -> None
     assert routing["cache_origin"]["candidate_decisions"][0]["attempt_id"] is None
 
 
-def test_shadow_observation_is_typed_and_never_affects_execution() -> None:
+def test_shadow_observation_is_typed_journaled_and_never_affects_execution(
+    tmp_path: Path,
+) -> None:
     contract = importlib.import_module("contract_v3")
     receipt = contract.complete_routing_receipt_v3(
         base_receipt(["serper"], "serper"),
-        [attempt("attempt_serper", "serper", AttemptOutcome.SUCCESS)],
+        [attempt("attempt_aaaaaaaaaaaaaaaa", "serper", AttemptOutcome.SUCCESS)],
         shadow_observation={
             "observed": True,
             "policy_id": "shadow-quality",
-            "policy_revision": "1",
+            "policy_revision": "3.1",
             "selected_provider": "linkup",
+            "shadow_provider": "serper",
+            "agreement": False,
             "affected_execution": False,
         },
     )
     contract.validate_routing_receipt_v3(receipt, require_completed=True)
     assert receipt["selected_provider"] == "serper"
     assert receipt["shadow_observation"]["selected_provider"] == "linkup"
+    assert receipt["shadow_observation"]["shadow_provider"] == "serper"
+    assert receipt["shadow_observation"]["agreement"] is False
     assert receipt["shadow_observation"]["affected_execution"] is False
+    record = {
+        "schema_version": 1,
+        "timestamp": 1_783_890_300.0,
+        "execution_id": "exec_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "capability": "search",
+        "status": "ok",
+        "routing_receipt": receipt,
+        "current_provider_attempts": ["attempt_aaaaaaaaaaaaaaaa"],
+        "cache": {"disposition": "miss", "origin_execution_id": None},
+        "limits_applied": {},
+        "warning_codes": [],
+        "error_code": None,
+    }
+    privacy = importlib.import_module("operator_privacy_v3")
+    assert privacy.assert_operator_payload_safe(record) is None
+    journal = importlib.import_module("operator_receipts_v3").OperatorReceiptJournal(
+        tmp_path,
+        now=lambda: 1_783_890_301.0,
+    )
+    assert journal.append(record) is True
+    assert journal.load(limit=1)[0]["routing_receipt"]["shadow_observation"] == receipt[
+        "shadow_observation"
+    ]
+
+    malformed = json.loads(json.dumps(receipt))
+    malformed["shadow_observation"]["agreement"] = "false"
+    with pytest.raises(ValueError, match="extended shadow observation"):
+        contract.validate_routing_receipt_v3(malformed, require_completed=True)
 
 
 def test_privacy_choke_accepts_fixtures_but_rejects_allowed_key_freetext() -> None:
     privacy = importlib.import_module("operator_privacy_v3")
-    for name in ("overview.json", "receipts.json", "benchmark-history.json"):
+    for name in (
+        "overview.json",
+        "receipts.json",
+        "benchmark-history.json",
+        "shadow-evaluation.json",
+    ):
         assert privacy.assert_operator_payload_safe(fixture(name)) is None
 
     with pytest.raises(ValueError, match="known-safe"):

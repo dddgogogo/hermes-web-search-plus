@@ -1126,38 +1126,88 @@
       ]
     },
     "ShadowObservationV3": {
-      "type": "object",
-      "properties": {
-        "observed": {
-          "type": "boolean",
-          "const": true
-        },
-        "policy_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "policy_revision": {
-          "type": "string",
-          "minLength": 1
-        },
-        "selected_provider": {
-          "type": [
-            "string",
-            "null"
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "observed": {
+              "type": "boolean",
+              "const": true
+            },
+            "policy_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_revision": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selected_provider": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "affected_execution": {
+              "type": "boolean",
+              "const": false
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "observed",
+            "policy_id",
+            "policy_revision",
+            "selected_provider",
+            "affected_execution"
           ]
         },
-        "affected_execution": {
-          "type": "boolean",
-          "const": false
+        {
+          "type": "object",
+          "properties": {
+            "observed": {
+              "type": "boolean",
+              "const": true
+            },
+            "policy_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "policy_revision": {
+              "type": "string",
+              "minLength": 1
+            },
+            "selected_provider": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "shadow_provider": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "agreement": {
+              "type": "boolean"
+            },
+            "affected_execution": {
+              "type": "boolean",
+              "const": false
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "observed",
+            "policy_id",
+            "policy_revision",
+            "selected_provider",
+            "shadow_provider",
+            "agreement",
+            "affected_execution"
+          ]
         }
-      },
-      "additionalProperties": false,
-      "required": [
-        "observed",
-        "policy_id",
-        "policy_revision",
-        "selected_provider",
-        "affected_execution"
       ]
     },
     "RoutingReceipt": {

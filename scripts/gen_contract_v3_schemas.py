@@ -468,19 +468,38 @@ response_defs = {
             "selected_provider", "fallback_reason", "candidate_decisions",
         ),
     ),
-    "ShadowObservationV3": obj(
-        {
-            "observed": {"type": "boolean", "const": True},
-            "policy_id": {"type": "string", "minLength": 1},
-            "policy_revision": {"type": "string", "minLength": 1},
-            "selected_provider": {"type": ["string", "null"]},
-            "affected_execution": {"type": "boolean", "const": False},
-        },
-        (
-            "observed", "policy_id", "policy_revision", "selected_provider",
-            "affected_execution",
-        ),
-    ),
+    "ShadowObservationV3": {
+        "anyOf": [
+            obj(
+                {
+                    "observed": {"type": "boolean", "const": True},
+                    "policy_id": {"type": "string", "minLength": 1},
+                    "policy_revision": {"type": "string", "minLength": 1},
+                    "selected_provider": {"type": ["string", "null"]},
+                    "affected_execution": {"type": "boolean", "const": False},
+                },
+                (
+                    "observed", "policy_id", "policy_revision", "selected_provider",
+                    "affected_execution",
+                ),
+            ),
+            obj(
+                {
+                    "observed": {"type": "boolean", "const": True},
+                    "policy_id": {"type": "string", "minLength": 1},
+                    "policy_revision": {"type": "string", "minLength": 1},
+                    "selected_provider": {"type": ["string", "null"]},
+                    "shadow_provider": {"type": ["string", "null"]},
+                    "agreement": {"type": "boolean"},
+                    "affected_execution": {"type": "boolean", "const": False},
+                },
+                (
+                    "observed", "policy_id", "policy_revision", "selected_provider",
+                    "shadow_provider", "agreement", "affected_execution",
+                ),
+            ),
+        ]
+    },
     "RoutingReceipt": obj(
         {
             "policy_id": {"type": "string", "minLength": 1},

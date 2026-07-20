@@ -93,7 +93,12 @@ _ENUM_VALUES = {
     "extract": {"collected", "not_collected"},
 }
 _PROVIDER_FIELDS = {
-    "provider", "selected_provider", "recommended_priority", "candidate_order",
+    "provider",
+    "selected_provider",
+    "shadow_provider",
+    "classic_provider",
+    "recommended_priority",
+    "candidate_order",
 }
 _EXECUTION_FIELDS = {"execution_id", "origin_execution_id"}
 _ATTEMPT_FIELDS = {"attempt_id", "current_provider_attempts"}
@@ -140,7 +145,7 @@ def _validate_string(value: str, field_name: str | None, location: str) -> None:
         return
     if field_name == "policy_id" and value in {"classic", "shadow-quality"}:
         return
-    if field_name == "policy_revision" and value in {"v2.9.1", "fixture", "1"}:
+    if field_name == "policy_revision" and value in {"v2.9.1", "fixture", "1", "3.1"}:
         return
     raise ValueError(f"operator payload string is not known-safe at {location}")
 

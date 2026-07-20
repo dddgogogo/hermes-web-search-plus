@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlsplit
 import operator_console_v3
 from cache import CACHE_DIR
 from config import load_config
+from state_store_v3 import SQLiteStateStore
 
 
 LOOPBACK_HOST = "127.0.0.1"
@@ -348,6 +349,12 @@ def _handler_class() -> type[BaseHTTPRequestHandler]:
                 payload = backend.build_benchmark_history(
                     **common,
                     limit=_parse_limit(parsed.query),
+                )
+            elif parsed.path == "/api/v3/shadow-evaluation":
+                if parsed.query:
+                    raise ValueError("shadow evaluation does not accept query parameters")
+                payload = backend.build_shadow_evaluation(
+                    SQLiteStateStore.open_readonly(self._operator_server.state_path)
                 )
             else:
                 raise FileNotFoundError

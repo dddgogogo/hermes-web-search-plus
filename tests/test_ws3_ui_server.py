@@ -40,6 +40,18 @@ class FakeSnapshots:
             "availability": {"search": "not_collected", "extract": "not_collected"},
         }
 
+    def build_shadow_evaluation(self, _store: Any) -> dict[str, Any]:
+        self.calls.append(("shadow-evaluation", None))
+        return {
+            "schema_version": 1,
+            "policy_id": "shadow-quality",
+            "policy_revision": "3.1",
+            "window": 2592000,
+            "total_evaluations": 0,
+            "agreement_rate": 0.0,
+            "divergences": [],
+        }
+
     @staticmethod
     def serialize_endpoint_payload(
         payload: dict[str, Any], **_kwargs: Any
@@ -178,7 +190,7 @@ def test_server_rejects_bad_host_and_missing_or_wrong_token(tmp_path: Path) -> N
         assert backend.calls == []
 
 
-def test_server_exposes_only_three_get_head_json_routes(tmp_path: Path) -> None:
+def test_server_exposes_only_read_only_get_head_json_routes(tmp_path: Path) -> None:
     with running_server(tmp_path) as (server, backend):
         status, headers, body = request(server, "GET", "/api/v3/overview")
         assert status == 200
@@ -201,16 +213,23 @@ def test_server_exposes_only_three_get_head_json_routes(tmp_path: Path) -> None:
         assert head_headers["content-length"] == get_headers["content-length"]
         assert int(head_headers["content-length"]) == len(get_body)
 
+        status, _, body = request(server, "GET", "/api/v3/shadow-evaluation")
+        assert status == 200
+        assert json.loads(body)["policy_revision"] == "3.1"
+
         assert backend.calls == [
             ("overview", None),
             ("receipts", 100),
             ("benchmark-history", 2),
             ("benchmark-history", 2),
+            ("shadow-evaluation", None),
         ]
 
         status, _, _ = request(server, "GET", "/api/v3/missing")
         assert status == 404
         status, _, _ = request(server, "GET", "/api/v3/receipts?unknown=1")
+        assert status == 400
+        status, _, _ = request(server, "GET", "/api/v3/shadow-evaluation?window=1")
         assert status == 400
 
 

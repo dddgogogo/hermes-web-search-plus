@@ -28,6 +28,8 @@ from contract_v3 import (
     complete_routing_receipt_v3,
 )
 from operator_receipts_v3 import OperatorReceiptJournal, receipt_record_from_response
+from shadow_policy_v3 import evaluate_shadow_policy
+from state_store_v3 import SQLiteStateStore
 
 
 PIPELINE_STAGES: Tuple[str, ...] = (
@@ -173,6 +175,68 @@ def _shadow_intent_observation(selected_provider: str | None) -> Dict[str, Any]:
     }
 
 
+def _is_auto_search_plan(request: RequestV3, plan: ProviderPlan) -> bool:
+    """Return whether Classic selected the provider at the search plan boundary."""
+    return (
+        request.capability is Capability.SEARCH
+        and str(request.routing.get("provider") or "auto") == "auto"
+        and plan.routing_metadata.get("auto_routed") is not False
+    )
+
+
+def _shadow_observation(
+    request: RequestV3,
+    plan: ProviderPlan,
+    config: Dict[str, Any],
+    *,
+    selected_provider: str | None,
+) -> Dict[str, Any]:
+    """Evaluate auto-routed searches, preserving the 3.0 stub on any failure."""
+    if not _is_auto_search_plan(request, plan):
+        return _shadow_intent_observation(selected_provider)
+    try:
+        return evaluate_shadow_policy(request, plan, config)
+    except Exception:
+        # Shadow observation is strictly observational and cannot break Classic.
+        return _shadow_intent_observation(selected_provider)
+
+
+def _record_shadow_observation(
+    observation: Dict[str, Any] | None,
+    plan: ProviderPlan,
+    v3_config: Dict[str, Any],
+) -> None:
+    """Persist an extended shadow observation without changing the response."""
+    extended_fields = {
+        "observed",
+        "policy_id",
+        "policy_revision",
+        "selected_provider",
+        "shadow_provider",
+        "agreement",
+        "affected_execution",
+    }
+    if not isinstance(observation, dict) or set(observation) != extended_fields:
+        return
+    try:
+        state_path = v3_config.get("state_path") or os.path.join(
+            str(legacy_cache.CACHE_DIR), "v3", "state.sqlite3"
+        )
+        routing_summary = plan.routing_metadata.get("analysis_summary") or {}
+        routing_class = str(routing_summary.get("routing_class") or "general")
+        SQLiteStateStore(state_path).record_shadow_evaluation(
+            routing_class=routing_class,
+            classic_provider=observation["selected_provider"],
+            shadow_provider=observation["shadow_provider"],
+            agreement=observation["agreement"],
+            policy_id=observation["policy_id"],
+            policy_revision=observation["policy_revision"],
+        )
+    except Exception:
+        # Operator evidence is strictly best-effort and must never alter execution.
+        return
+
+
 def _append_operator_receipt(
     response: ResponseV3,
     cache_root: Any,
@@ -276,9 +340,8 @@ def execute_v3_request(
                 if policy_mode == "classic":
                     cached_routing["shadow_observation"] = None
                 else:
-                    cached_routing["shadow_observation"] = _shadow_intent_observation(
-                        cached_routing.get("selected_provider")
-                    )
+                    # A cache hit has no current routing decision to observe.
+                    cached_routing["shadow_observation"] = None
                 warnings = list(cached_response.warnings)
                 status = cached_response.status
                 if lookup.disposition == "stale_hit":
@@ -358,11 +421,19 @@ def execute_v3_request(
                 response.routing_receipt,
                 [],
                 shadow_observation=(
-                    _shadow_intent_observation(None)
+                    _shadow_observation(
+                        request,
+                        plan,
+                        runtime_config,
+                        selected_provider=None,
+                    )
                     if policy_mode == "shadow"
                     else None
                 ),
             ),
+        )
+        _record_shadow_observation(
+            response.routing_receipt["shadow_observation"], plan, v3_config
         )
         stage_set = {
             "normalize",
@@ -406,8 +477,11 @@ def execute_v3_request(
         response = replace(response, provider_attempts=list(provider_attempts))
     routing_receipt = {**response.routing_receipt, "mode": policy_mode}
     if policy_mode == "shadow":
-        shadow_observation = _shadow_intent_observation(
-            routing_receipt.get("selected_provider")
+        shadow_observation = _shadow_observation(
+            request,
+            plan,
+            runtime_config,
+            selected_provider=routing_receipt.get("selected_provider"),
         )
     else:
         shadow_observation = None
@@ -422,6 +496,7 @@ def execute_v3_request(
             shadow_observation=shadow_observation,
         ),
     )
+    _record_shadow_observation(shadow_observation, plan, v3_config)
     if cache_mode == "bypass" or (cache_mode == "prefer" and not cache_allowed):
         response = replace(response, cache_status={"disposition": "bypassed"})
     if adapter.finalize_response is not None:
