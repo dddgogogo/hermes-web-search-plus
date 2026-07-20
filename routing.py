@@ -4,7 +4,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from config import DEFAULT_CONFIG, get_api_key
-from provider_registry import DEFAULT_PROVIDER_PRIORITY, PROVIDER_SPECS
+from provider_registry import DEFAULT_AUTO_ALLOW, DEFAULT_PROVIDER_PRIORITY, PROVIDER_SPECS
 from provider_stats import performance_adjustments
 from quality import _choose_tie_winner
 
@@ -1241,8 +1241,12 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
             if matches
         },
         "available_providers": [
-            p for p in ["serper", "serpbase", "brave", "tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "kilo-perplexity", "you", "searxng"]
-            if get_api_key(p, config) and p not in config.get("auto_routing", {}).get("disabled_providers", []) and _provider_auto_allowed(p, config.get("auto_routing", {}))
+            provider
+            for provider, spec in PROVIDER_SPECS.items()
+            if spec.supports_search
+            and get_api_key(provider, config)
+            and provider not in config.get("auto_routing", {}).get("disabled_providers", [])
+            and _provider_auto_allowed(provider, config.get("auto_routing", {}))
         ]
     }
 
@@ -1253,6 +1257,7 @@ def _provider_auto_allowed(provider: str, auto_config: Dict[str, Any]) -> bool:
     experimental providers from receiving user queries automatically.
     """
     auto_allow = auto_config.get("auto_allow", {}) if isinstance(auto_config, dict) else {}
+    default_allowed = bool(DEFAULT_AUTO_ALLOW.get(provider, True))
     if not isinstance(auto_allow, dict):
-        return True
-    return bool(auto_allow.get(provider, True))
+        return default_allowed
+    return bool(auto_allow.get(provider, default_allowed))

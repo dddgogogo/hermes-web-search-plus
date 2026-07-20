@@ -6,7 +6,7 @@ import __init__ as plugin
 
 
 def test_provider_registry_is_the_complete_capability_source():
-    assert registry.SEARCH_PROVIDER_IDS == (
+    assert registry.SEARCH_PROVIDER_IDS[:12] == (
         "serper",
         "serpbase",
         "brave",

@@ -23,6 +23,7 @@ from __future__ import annotations
 import importlib
 import statistics
 import time
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -33,6 +34,8 @@ from config import (
     validate_api_key,
 )
 from provider_registry import DEFAULT_PROVIDER_PRIORITY, PROVIDER_SPECS, SEARCH_PROVIDER_IDS
+from provider_adapter_protocol import validate_adapter_result
+from provider_dispatch import SEARCH_DISPATCH
 from provider_stats import LATENCY_CEILING_SECONDS
 from quality import _snippet_text, normalize_result_url
 
@@ -132,6 +135,50 @@ def _call_provider_search(
     routing stats.
     """
     key = validate_api_key(provider, config)
+    spec = PROVIDER_SPECS.get(provider)
+    if spec is not None and spec.execute_search is not None:
+        # SDK adapters use the public formal dispatch contract.  Built-ins keep
+        # their historical direct-function path below, including its exact
+        # minimal kwargs surface and monkeypatch seam.
+        args = SimpleNamespace(
+            query=query,
+            max_results=max_results,
+            country=None,
+            language=None,
+            search_type="search",
+            time_range=None,
+            freshness=None,
+            images=False,
+            depth="basic",
+            topic="general",
+            include_domains=None,
+            exclude_domains=None,
+            raw_content=False,
+            linkup_depth="standard",
+            linkup_output_type="searchResults",
+            querit_base_url=None,
+            querit_base_path=None,
+            exa_type="neural",
+            category=None,
+            start_date=None,
+            end_date=None,
+            similar_url=None,
+            exa_verbosity="standard",
+            firecrawl_sources=["web"],
+            firecrawl_scrape=False,
+            you_safesearch="moderate",
+            no_news=False,
+            livecrawl="fallback",
+            searxng_url=None,
+            categories=None,
+            engines=None,
+            searxng_safesearch=0,
+        )
+        return validate_adapter_result(
+            provider,
+            "search",
+            SEARCH_DISPATCH[provider](search, provider, args, key, config, {}),
+        )
     if provider == "searxng":
         return search.search_searxng(
             query=query,

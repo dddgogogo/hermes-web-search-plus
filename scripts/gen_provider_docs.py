@@ -36,9 +36,9 @@ def _load_registry_and_catalog() -> Tuple[Any, List[Dict[str, Any]]]:
     (like tests/test_onboarding.py) instead of a package import. Its fallback
     `from provider_registry import ...` path needs the plugin root on sys.path.
     """
-    registry = _load_module("wsp_provider_registry_docgen", ROOT / "provider_registry.py")
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
+    registry = _load_module("wsp_provider_registry_docgen", ROOT / "provider_registry.py")
     plugin = _load_module("wsp_plugin_docgen", ROOT / "__init__.py")
     return registry, plugin._get_provider_catalog()
 
@@ -72,8 +72,8 @@ def render_provider_docs() -> str:
         "",
         "<!-- Generated file. Do not edit by hand. -->",
         "",
-        "This reference is generated from `provider_registry.py` and the plugin provider",
-        f"catalog; regenerate it with `{REGENERATE_COMMAND}` after changing provider metadata.",
+        "This reference is generated from `provider_registry.py`, discovered `providers.d` modules,",
+        f"and the plugin provider catalog; regenerate it with `{REGENERATE_COMMAND}` after changing provider metadata.",
         "",
         "## Provider matrix",
         "",
