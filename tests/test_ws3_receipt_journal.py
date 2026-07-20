@@ -673,7 +673,7 @@ def test_shadow_interface_stub_receipt_survives_privacy_and_journals(tmp_path) -
     journal_module = importlib.import_module("operator_receipts_v3")
     privacy = importlib.import_module("operator_privacy_v3")
     source = fixture("receipts.json")["receipts"][0]
-    record = journal_record_from_fixture(source) if "journal_record_from_fixture" in dir() else {
+    record = {
         "schema_version": source["schema_version"],
         "timestamp": source["timestamp"],
         "execution_id": source["execution_id"],
