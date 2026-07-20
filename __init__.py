@@ -43,6 +43,7 @@ try:  # Package load path used by Hermes plugin discovery.
         KEYLESS_PROVIDER_IDS,
         PROVIDER_ENV_KEYS,
         PROVIDER_SPECS,
+        PROVIDER_STARTUP_DIAGNOSTICS,
         SEARCH_PROVIDER_IDS,
         keyless_public_env_var,
         plugin_catalog,
@@ -63,6 +64,7 @@ except ImportError:  # Direct script/test imports from the plugin directory.
         KEYLESS_PROVIDER_IDS,
         PROVIDER_ENV_KEYS,
         PROVIDER_SPECS,
+        PROVIDER_STARTUP_DIAGNOSTICS,
         SEARCH_PROVIDER_IDS,
         keyless_public_env_var,
         plugin_catalog,
@@ -160,6 +162,10 @@ def _provider_config_status(env: Optional[Mapping[str, str]] = None) -> Dict[str
         "configured_extract_count": configured_extract_count,
         "total": len(_PROVIDER_CATALOG),
         "providers": providers,
+        "startup_diagnostics": [
+            {"module": diagnostic.module, "code": diagnostic.code}
+            for diagnostic in PROVIDER_STARTUP_DIAGNOSTICS
+        ],
     }
 
 

@@ -92,6 +92,7 @@ from provider_adapter_protocol import validate_adapter_result
 from provider_dispatch import SEARCH_DISPATCH
 from provider_registry import (
     EXTRACT_PROVIDER_IDS,
+    PROVIDER_STARTUP_DIAGNOSTICS,
     PROVIDER_SPECS,
     SEARCH_PROVIDER_IDS,
     doctor_catalog,
@@ -627,6 +628,10 @@ def _build_doctor_report(config: Dict[str, Any], *, live: bool = False) -> Dict[
             "provider_health_file": str(CACHE_DIR / "provider_health.json"),
         },
         "providers": providers,
+        "startup_diagnostics": [
+            {"module": diagnostic.module, "code": diagnostic.code}
+            for diagnostic in PROVIDER_STARTUP_DIAGNOSTICS
+        ],
     }
 
 

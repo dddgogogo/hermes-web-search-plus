@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from env_loader import clean_env_value as _shared_clean_env_value, is_truthy, load_env_files
+from errors_v3 import ProviderConfigError
 from provider_registry import (
     DEFAULT_AUTO_ALLOW,
     DEFAULT_PROVIDER_PRIORITY,
@@ -19,11 +20,6 @@ from provider_registry import (
     PROVIDER_SPECS,
     keyless_public_env_var,
 )
-
-
-class ProviderConfigError(Exception):
-    """Raised when a provider is missing or has an invalid API key/config."""
-    pass
 
 
 class SelfHostedProfileError(ProviderConfigError):

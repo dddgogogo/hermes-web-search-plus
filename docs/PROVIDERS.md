@@ -2,8 +2,8 @@
 
 <!-- Generated file. Do not edit by hand. -->
 
-This reference is generated from `provider_registry.py` and the plugin provider
-catalog; regenerate it with `python scripts/gen_provider_docs.py` after changing provider metadata.
+This reference is generated from `provider_registry.py`, discovered `providers.d` modules,
+and the plugin provider catalog; regenerate it with `python scripts/gen_provider_docs.py` after changing provider metadata.
 
 ## Provider matrix
 

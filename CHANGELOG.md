@@ -4,6 +4,7 @@
 
 ### ✨ Added
 - Added the `self_hosted` no-paid-key operating profile. Its runtime-derived auto pools use SearXNG and keyless Keenable, preserve explicit keyed overrides with visible result metadata, and expose offline profile prerequisites through `setup.py status`.
+- Added the additive-only WSP 3.x public Provider SDK (`wsp_sdk`) with automatic `providers.d` discovery, typed startup diagnostics, fail-closed duplicate IDs, shared provider conformance checks, and `setup.py new-provider` scaffolding. New provider modules supply their own formal adapters without core registry or dispatch edits; discovered providers remain explicit-only unless they explicitly opt into the existing auto-routing gate.
 - Added persisted, deterministic Shadow quality-policy observations for auto-routed searches. Classic Routing v2 remains authoritative; the new local Operator Console aggregate reports agreement and provider divergences without storing query text.
 - Added opt-in v3 budget preflight. Provider fan-out, daily ledger quota, request deadline, and extraction context are checked before provider execution, with typed receipt evidence for deterministic degradation or zero-attempt budget failures.
 - Added deterministic Diversity Score diagnostics for quality reports: registrable-domain coverage, canonical-URL duplication, near-duplicate snippets, and research-provider mix. Research-result reranking remains explicitly opt-in.
