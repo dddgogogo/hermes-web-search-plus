@@ -9,6 +9,7 @@
 - Added opt-in v3 budget preflight. Provider fan-out, daily ledger quota, request deadline, and extraction context are checked before provider execution, with typed receipt evidence for deterministic degradation or zero-attempt budget failures.
 - Added deterministic Diversity Score diagnostics for quality reports: registrable-domain coverage, canonical-URL duplication, near-duplicate snippets, and research-provider mix. Research-result reranking remains explicitly opt-in.
 - Added the versioned v3 extraction-cache identity contract: request-exact URL, budget, bounded-context, extraction-control, provider-endpoint, URL-policy and retained-storage variation; lossless extraction provenance/legacy alias round-trips; and fail-closed identity-version and corrupt-entry quarantine handling.
+- Added opt-in semantic span extraction on `web_extract_plus` (`spans`/`spans_query`): deterministic query-conditioned passage selection over the NFC-normalized cleaned text with a mechanical offset contract — Unicode codepoint indices, half-open `[start,end)`, slicing invariant, and `within_preview` flags valid against the retained full text (docs/V3_SPAN_CONTRACT.md).
 - Added the read-only Operator Console endpoint `/api/v3/provider-health`: per-provider daily trend buckets (samples, errors, error rate, result counts, median latency) aggregated from persisted adaptive samples, without provider calls or stored query text.
 
 ### ⚠️ Deprecated
