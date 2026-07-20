@@ -21,6 +21,7 @@ Each feature is independent; enable only what you want.
 | Feature | Config | Off means |
 |---|---|---|
 | Shadow Observer | `routing.policy_mode: "shadow"` | classic-only, no evaluation, no persistence |
+| | Note: config enables shadow on the standard tool/in-process path. Native `RequestV3` callers must also set `routing.policy_mode: "shadow"` on the request; the legacy `search.py` CLI runs outside the v3 orchestrator and never evaluates shadow. | |
 | Budget Preflight | `budget_preflight.enabled: true` + limits | no checks, no receipt actions |
 | Diversity rerank | `quality.diversity.rerank: true` | diagnosis only, ordering unchanged |
 | Self-hosted profile | `profile: "self_hosted"` | standard provider pools |
@@ -29,6 +30,20 @@ Each feature is independent; enable only what you want.
 
 Kill switches (environment, always win over config):
 `WSP_ROUTING_CLASSIC_ONLY=1`, `WSP_BUDGET_PREFLIGHT_OFF=1`.
+
+## Operational notes
+
+- The WAL checkpoint-on-close mitigation requires a Python/SQLite build that
+  exposes `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE`; on older builds behavior matches
+  3.0.2 (the mitigation is a no-op).
+- `budget_preflight.max_daily_provider_calls` is a soft pre-check: the
+  authoritative, atomic reservation happens per attempt. Under high
+  concurrency a request may pass preflight and still be stopped at attempt
+  time with a typed budget error.
+- Preflight's daily-quota check reads the state database read-only; on
+  filesystems where a live-WAL database cannot be opened read-only, the check
+  fails closed (with `on_exceed: "abort"` this rejects requests). Use
+  `degrade` or disable the daily limit if your filesystem cannot support it.
 
 ## Verifying the upgrade
 

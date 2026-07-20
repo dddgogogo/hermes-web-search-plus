@@ -667,3 +667,35 @@ def test_orchestrator_journals_direct_origin_and_cache_hit_separately(
         cached["routing_receipt"]["cache_origin"]["execution_id"]
         == first.response.execution_id
     )
+
+
+def test_shadow_interface_stub_receipt_survives_privacy_and_journals(tmp_path) -> None:
+    journal_module = importlib.import_module("operator_receipts_v3")
+    privacy = importlib.import_module("operator_privacy_v3")
+    source = fixture("receipts.json")["receipts"][0]
+    record = journal_record_from_fixture(source) if "journal_record_from_fixture" in dir() else {
+        "schema_version": source["schema_version"],
+        "timestamp": source["timestamp"],
+        "execution_id": source["execution_id"],
+        "capability": source["capability"],
+        "status": source["status"],
+        "routing_receipt": dict(source["routing"]),
+        "cache": dict(source["cache"]),
+        "current_provider_attempts": list(source["current_provider_attempts"]),
+        "limits_applied": dict(source["limits"]),
+        "warning_codes": list(source["warning_codes"]),
+        "error_code": source["error_code"],
+    }
+    record["routing_receipt"]["shadow_observation"] = {
+        "observed": True,
+        "policy_id": "shadow-interface",
+        "policy_revision": "3.0",
+        "selected_provider": "serper",
+        "affected_execution": False,
+    }
+
+    privacy.assert_operator_payload_safe(record)
+    journal = journal_module.OperatorReceiptJournal(tmp_path, now=lambda: 1783890301.0)
+    assert journal.append(record) is True
+    loaded = journal.load(limit=10)
+    assert loaded and loaded[0]["routing_receipt"]["shadow_observation"]["policy_id"] == "shadow-interface"

@@ -14,7 +14,7 @@ Every cacheable extraction request has one typed `ExtractionCacheIdentityV3` obj
 
 | Component | Required canonical value | Vary guarantee |
 | --- | --- | --- |
-| `identity_version` | Explicit integer, currently `4` | Any unknown or older version is a miss. |
+| `identity_version` | Explicit integer, currently `5` | Any unknown or older version is a miss. |
 | Requested URLs | Complete original URL sequence, before fan-out capping | URL additions, removals, substitutions and ordering changes miss. |
 | Attempt budget | Requested budget plus effective request/provider attempt ceilings | A different execution budget misses. |
 | Effective context limits | Applied `max_urls` and `max_context_chars` | Bound changes that affect execution or output miss. |
@@ -22,6 +22,7 @@ Every cacheable extraction request has one typed `ExtractionCacheIdentityV3` obj
 | Provider selection | Requested provider, fallback permission, selected provider and candidate order | Routing/fallback selection cannot reuse another provider plan. |
 | Provider endpoint configuration | Effective, non-secret extractor settings for every candidate | Endpoint, timeout, Parallel extraction limit/model and keyless mode changes miss; this includes `serper.scrape_url`. |
 | URL policy | Effective private/internal URL permission | A policy transition cannot serve a previous entry. |
+| Semantic spans | Effective span options (`spans`, `spans_query`, span limits) | Span-enabled and span-free requests never share an entry; a different span query misses. |
 | Full-text storage policy | Opaque storage-root fingerprint, TTL and owned-byte limit | Retained-content namespace or retention changes miss. |
 
 Credentials are never identity material. Storage-root paths are represented only by a SHA-256 fingerprint in the stored identity envelope.
@@ -55,4 +56,4 @@ No eager migration occurs. Historical entries remain untouched unless they are c
 
 ## Versioning policy
 
-`identity_version` is independent of response `cache_schema_version` and the v3 wire contract version. It MUST be incremented whenever the canonical identity object, canonical serialization or any included component changes. Implementations MUST fail closed on a version they do not recognize. Version `4` begins this typed form after the unversioned 3.0.2 extraction-cache key material.
+`identity_version` is independent of response `cache_schema_version` and the v3 wire contract version. It MUST be incremented whenever the canonical identity object, canonical serialization or any included component changes. Implementations MUST fail closed on a version they do not recognize. Version `4` began this typed form after the unversioned 3.0.2 extraction-cache key material; version `5` adds the `semantic_spans` component (span options participate in identity).

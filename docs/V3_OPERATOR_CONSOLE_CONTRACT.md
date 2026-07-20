@@ -24,7 +24,8 @@ Every response uses `Cache-Control: no-store`, `Content-Security-Policy`, `X-Con
 2. `/api/v3/receipts` output;
 3. `/api/v3/benchmark-history` output;
 4. `/api/v3/shadow-evaluation` output;
-5. every receipt record before journal persistence.
+5. `/api/v3/provider-health` output;
+6. every receipt record before journal persistence.
 
 No endpoint or writer may carry a private per-endpoint copy of this logic. The validator fails closed before serialization/write.
 
@@ -198,6 +199,11 @@ When present:
   "affected_execution": false
 }
 ```
+
+The legacy five-field interface form (`policy_id: "shadow-interface"`,
+`policy_revision: "3.0"`, no `shadow_provider`/`agreement`) remains valid and
+journal-safe; it is emitted when shadow mode is active but no evaluation ran
+(non-auto requests, evaluator fallback).
 
 The legacy five-field observation remains accepted for 3.0 compatibility. For
 the extended observation, `agreement` MUST be boolean and `shadow_provider` MUST

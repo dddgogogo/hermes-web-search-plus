@@ -2,8 +2,9 @@
 
 WSP 3.1 delivers everything 3.0 deliberately deferred, plus the quality and
 budget layers around it. The public surface is unchanged: the same two tools,
-the same call style, and — with default configuration — bit-identical behavior
-to 3.0.2. Every 3.1 feature is opt-in.
+the same call style, and — with default configuration — functionally unchanged
+behavior vs. 3.0.2 (see Compatibility for the two visible deltas). Every 3.1
+feature is opt-in.
 
 ## Highlights
 
@@ -73,9 +74,13 @@ adaptive samples — no provider calls, no stored query text.
 
 ## Compatibility
 
-- Default configuration: no behavior change vs. 3.0.2. All new features are
-  opt-in via config; all new receipt/response fields appear only when their
-  feature is enabled.
+- Default configuration: functionally unchanged vs. 3.0.2, with two visible
+  deltas. (1) Quality reports (`quality_report=true`) always include the new
+  `diversity` diagnostics block; result ordering is unchanged. (2) The
+  extraction cache uses the new versioned identity, so the first request for
+  each URL set after the upgrade is a cache miss (one-time repopulation;
+  strictly fewer wrong hits afterwards). All other new receipt/response
+  fields appear only when their feature is enabled.
 - Operational state schema: v2 → v3 (additive; `shadow_evaluations_v3` table).
   The upgrade is automatic and in-place via idempotent DDL; no migration
   command is required when coming from 3.0.x. Coming from 2.x, run the
