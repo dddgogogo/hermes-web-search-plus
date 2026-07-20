@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v3.1.0] — 2026-07-20
+
 ### ✨ Added
 - Added the `self_hosted` no-paid-key operating profile. Its runtime-derived auto pools use SearXNG and keyless Keenable, preserve explicit keyed overrides with visible result metadata, and expose offline profile prerequisites through `setup.py status`.
 - Added the additive-only WSP 3.x public Provider SDK (`wsp_sdk`) with automatic `providers.d` discovery, typed startup diagnostics, fail-closed duplicate IDs, shared provider conformance checks, and `setup.py new-provider` scaffolding. New provider modules supply their own formal adapters without core registry or dispatch edits; discovered providers remain explicit-only unless they explicitly opt into the existing auto-routing gate.
