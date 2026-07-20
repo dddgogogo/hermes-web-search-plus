@@ -95,6 +95,7 @@ Presets:
 - `lean`: You.com + Linkup. Small fast search plus extraction.
 - `search`: You.com + Serper + Exa + Firecrawl + Tavily + Linkup. Full default Routing v2 pool.
 - `extract`: Firecrawl + Linkup + Exa + Tavily. Extraction-heavy setup.
+- `self-hosted`: SearXNG + keyless Keenable. Enables the privacy/budget profile without a commercial API key.
 - `all`: prompt for every supported provider.
 
 Search-capable providers include You.com, Serper, Exa, Firecrawl, Tavily, Linkup, Parallel, Brave, SearXNG, SerpBase, Querit, and Keenable. Extraction-capable providers are Linkup, Firecrawl, Tavily, Exa, Parallel, You.com, Keenable, and Serper. Native Perplexity and Kilo Perplexity are not registered in 3.0 because their legacy answer endpoints do not expose a verified source-only mode.
@@ -102,6 +103,37 @@ Search-capable providers include You.com, Serper, Exa, Firecrawl, Tavily, Linkup
 Keenable is keyless: set `KEENABLE_API_KEY` for the authenticated endpoints, or opt into its public tier (off by default). In the wizard, skip the Keenable key prompt and answer yes, or run `setup.py setup keenable --keyless-public`; it writes `keenable.allow_public: true` to `config.json` (equivalently `KEENABLE_ALLOW_PUBLIC=1`).
 
 With a `KEENABLE_API_KEY` set, requests always use the authenticated endpoints. Without a key and without the opt-in, Keenable is treated as unconfigured: it won't auto-route, fall back, or enable `web_extract_plus`. When the public tier is enabled, queries and fetched URLs are sent to an **unauthenticated** public service with per-IP limits and no SLA — roughly 1,000 requests/hour and 10 requests/second — so treat it as a best-effort last resort, not a dependable provider. The first request that uses the public endpoint logs a one-time warning so the egress is visible, and `web-search-plus doctor` reports keyless providers as `key=no` with a separate `keyless=on/off` badge so key status stays truthful.
+
+### Self-hosted profile
+
+Use the `self_hosted` profile when automatic traffic must avoid commercial API keys. The quickest setup is:
+
+```bash
+python ~/.hermes/plugins/web-search-plus/setup.py setup --preset self-hosted
+python ~/.hermes/plugins/web-search-plus/setup.py status
+```
+
+The preset records the profile, enables Keenable's existing keyless public tier, and prompts only for the optional SearXNG endpoint. To configure it directly, use the canonical `searxng.base_url` name (legacy `searxng.instance_url` remains supported):
+
+```json
+{
+  "profile": "self_hosted",
+  "searxng": {
+    "base_url": "https://search.example.net"
+  }
+}
+```
+
+At load time, rather than by saving duplicate routing settings, the profile derives this effective automatic policy:
+
+- Search auto pool: SearXNG and Keenable only.
+- Fallback: keyless-capable Keenable.
+- Extraction auto pool: keyless-capable Keenable only.
+- Budget preflight limits continue to apply unchanged when configured.
+
+`setup.py status` is an offline diagnostic: it displays the active profile and effective auto pool, then checks that the SearXNG URL is present and well formed and that Keenable is configured or its keyless public tier is enabled. It never contacts either provider. If neither SearXNG nor Keenable is usable, an automatic request returns the typed `self_hosted_profile_unavailable` error with the local remediation.
+
+The profile governs only automatic routing. An explicit `provider="serper"` (or another keyed provider) still works when its key exists; its result metadata includes `"profile_deviation": true` so the paid-key deviation is visible. Explicit provider requests remain useful for diagnostics and controlled operator overrides.
 
 ### Migration note for v2.0.0
 

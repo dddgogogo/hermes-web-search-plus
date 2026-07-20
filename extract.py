@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from config import ProviderConfigError, get_api_key, keyless_public_allowed, load_config
+from config import (
+    ProviderConfigError,
+    SELF_HOSTED_EXTRACT_PROVIDER_IDS,
+    get_api_key,
+    is_self_hosted_profile,
+    keyless_public_allowed,
+    load_config,
+)
 from cache import CACHE_DIR
 from cache_identity_v3 import ExtractionCacheIdentityV3
 from bounded_context_v3 import (
@@ -105,6 +112,15 @@ def resolve_extract_provider_priority(config: Optional[Dict[str, Any]] = None) -
             continue
         seen.add(provider)
         providers.append(provider)
+    if is_self_hosted_profile(config or {}):
+        # Profile-owned automatic extraction must not be re-expanded with the
+        # normal priority list. Explicit provider= requests are assembled by
+        # the caller and remain available when their credentials exist.
+        return [
+            provider
+            for provider in SELF_HOSTED_EXTRACT_PROVIDER_IDS
+            if provider in providers or provider in allowed
+        ]
     for provider in EXTRACT_PROVIDER_PRIORITY:
         if provider not in seen:
             providers.append(provider)
@@ -191,6 +207,11 @@ def _extract_plus_core(
     """Extract URL content with provider fallback."""
     config = config or load_config()
     selected = provider or "auto"
+    profile_deviation = (
+        is_self_hosted_profile(config)
+        and selected != "auto"
+        and selected not in SELF_HOSTED_EXTRACT_PROVIDER_IDS
+    )
     if not urls:
         return {"provider": selected, "results": [], "error": "No URLs provided", "requested_provider": selected}
     try:
@@ -275,6 +296,8 @@ def _extract_plus_core(
             if not engine_owned_attempt:
                 reset_provider_health(prov)
             result["routing"] = {"provider": prov, "requested_provider": selected, "fallback_used": bool(errors) or bool(cooldown_skips), "fallback_errors": errors}
+            if profile_deviation:
+                result.setdefault("metadata", {})["profile_deviation"] = True
             if cooldown_skips:
                 result["routing"]["cooldown_skips"] = cooldown_skips
             return result
@@ -294,15 +317,16 @@ def _extract_plus_core(
 def _plan_extract_v3(request: RequestV3, config: Dict[str, Any]) -> ProviderPlan:
     selected = str(request.routing.get("provider") or "auto")
     disabled = set((config.get("auto_routing") or {}).get("disabled_providers", []))
+    priority = resolve_extract_provider_priority(config)
     configured = [
         provider
-        for provider in resolve_extract_provider_priority(config)
+        for provider in priority
         if provider not in disabled
         and (get_api_key(provider, config) or keyless_public_allowed(provider, config))
     ]
     if selected == "auto":
         candidates = configured
-        chosen = candidates[0] if candidates else EXTRACT_PROVIDER_PRIORITY[0]
+        chosen = candidates[0] if candidates else priority[0]
     else:
         candidates = [selected] + [
             provider for provider in configured if provider != selected

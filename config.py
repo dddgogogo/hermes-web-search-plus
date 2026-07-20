@@ -14,6 +14,8 @@ from provider_registry import (
     DEFAULT_AUTO_ALLOW,
     DEFAULT_PROVIDER_PRIORITY,
     EXTRACT_PROVIDER_IDS,
+    KEYLESS_EXTRACT_PROVIDER_IDS,
+    KEYLESS_PROVIDER_IDS,
     PROVIDER_SPECS,
     keyless_public_env_var,
 )
@@ -22,6 +24,17 @@ from provider_registry import (
 class ProviderConfigError(Exception):
     """Raised when a provider is missing or has an invalid API key/config."""
     pass
+
+
+class SelfHostedProfileError(ProviderConfigError):
+    """Raised when the self-hosted profile has no usable automatic provider."""
+
+    error_type = "self_hosted_profile_unavailable"
+
+
+SUPPORTED_PROFILES = frozenset({"standard", "self_hosted"})
+SELF_HOSTED_SEARCH_PROVIDER_IDS = ("searxng", *KEYLESS_PROVIDER_IDS)
+SELF_HOSTED_EXTRACT_PROVIDER_IDS = tuple(KEYLESS_EXTRACT_PROVIDER_IDS)
 
 
 def _is_placeholder_env_value(value: str) -> bool:
@@ -39,6 +52,7 @@ def _load_env_file():
 
 DEFAULT_CONFIG = {
     "version": 1,
+    "profile": "standard",
     "default_provider": None,
     "defaults": {
         "provider": "serper",
@@ -172,6 +186,9 @@ DEFAULT_CONFIG = {
         "timeout": 30,
     },
     "searxng": {
+        # ``base_url`` is the canonical v3.1 name. ``instance_url`` remains
+        # supported for existing configs and environments.
+        "base_url": None,
         "instance_url": None,  # Required - user must set their own instance
         "safesearch": 0,  # 0=off, 1=moderate, 2=strict
         "engines": None,  # Optional list of engines to use
@@ -268,6 +285,65 @@ def _normalize_extract_provider_list_config(value: Any) -> List[str]:
 def _append_missing_extract_providers(providers: List[str]) -> List[str]:
     seen = set(providers)
     return list(providers) + [provider for provider in EXTRACT_PROVIDER_IDS if provider not in seen]
+
+
+def is_self_hosted_profile(config: Dict[str, Any]) -> bool:
+    """Return whether a runtime config selects the no-paid-key profile."""
+    return config.get("profile", "standard") == "self_hosted"
+
+
+def apply_profile_effects(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Derive profile-owned routing settings without persisting duplicate config.
+
+    The selected profile is the only durable setting.  Its effective automatic
+    routing policy is reconstructed whenever the config is loaded so later
+    default-priority changes do not leave stale copied profile settings behind.
+    Explicit provider calls do not use this automatic-routing gate.
+    """
+    profile = config.get("profile", "standard")
+    if profile not in SUPPORTED_PROFILES:
+        raise ValueError("profile must be standard or self_hosted")
+    config["profile"] = profile
+    if profile != "self_hosted":
+        return config
+
+    auto = config.get("auto_routing")
+    if auto is None:
+        # Direct in-process callers may supply only ``profile``. Persisted
+        # configs are merged with defaults before this point, but this keeps
+        # the one-switch profile usable on the public helper surface too.
+        auto = json.loads(json.dumps(DEFAULT_CONFIG["auto_routing"]))
+        config["auto_routing"] = auto
+    if not isinstance(auto, dict):
+        raise ValueError("auto_routing must be an object")
+    auto["provider_priority"] = list(SELF_HOSTED_SEARCH_PROVIDER_IDS)
+    auto["fallback_provider"] = "keenable"
+    auto["extract_provider_priority"] = list(SELF_HOSTED_EXTRACT_PROVIDER_IDS)
+    auto["auto_allow"] = {
+        provider: provider in SELF_HOSTED_SEARCH_PROVIDER_IDS
+        for provider, spec in PROVIDER_SPECS.items()
+        if spec.supports_search
+    }
+    return config
+
+
+def self_hosted_profile_error(config: Dict[str, Any]) -> Optional[SelfHostedProfileError]:
+    """Return a typed readiness error when self-hosted AUTO has no provider.
+
+    This deliberately checks only local configuration state. URL reachability
+    belongs to request execution; status/doctor must never make a provider call.
+    """
+    if not is_self_hosted_profile(config):
+        return None
+    searxng = config.get("searxng", {})
+    has_searxng_url = isinstance(searxng, dict) and bool(
+        searxng.get("base_url") or searxng.get("instance_url")
+    )
+    if has_searxng_url or provider_configured("keenable", config):
+        return None
+    return SelfHostedProfileError(
+        "self_hosted profile requires searxng.base_url or an enabled Keenable keyless/public endpoint"
+    )
 
 
 def _validate_runtime_config(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -396,7 +472,7 @@ def _validate_runtime_config(config: Dict[str, Any]) -> Dict[str, Any]:
     config["budget_preflight"] = budget_preflight
     config["quality"] = quality
     config["bounded_context"] = bounded
-    return config
+    return apply_profile_effects(config)
 
 
 def _unique_timestamped_path(path: Path, marker: str) -> Path:
@@ -443,7 +519,9 @@ def load_config() -> Dict[str, Any]:
             _quarantine_runtime_config(config_path, str(e))
             config = _deepcopy_default_config()
 
-    return config
+    # Defaults need no migration, but applying this here keeps direct/default
+    # loads on the same profile-derived path as persisted configurations.
+    return apply_profile_effects(config)
 
 
 def get_api_key(provider: str, config: Dict[str, Any] = None) -> Optional[str]:
@@ -547,7 +625,8 @@ def get_searxng_instance_url(config: Dict[str, Any] = None) -> Optional[str]:
     """Get SearXNG instance URL from config or environment.
 
     SearXNG is self-hosted, so no API key needed - just the instance URL.
-    Priority: config.json > SEARXNG_INSTANCE_URL environment variable
+    Priority: config.json searxng.base_url > legacy instance_url >
+    SEARXNG_INSTANCE_URL environment variable.
 
     Security: URL is validated to prevent SSRF via scheme enforcement.
     Both config sources (config.json, env var) are operator-controlled,
@@ -557,7 +636,7 @@ def get_searxng_instance_url(config: Dict[str, Any] = None) -> Optional[str]:
     if config:
         searxng_config = config.get("searxng", {})
         if isinstance(searxng_config, dict):
-            url = searxng_config.get("instance_url")
+            url = searxng_config.get("base_url") or searxng_config.get("instance_url")
             if url:
                 return _validate_searxng_url(url)
 

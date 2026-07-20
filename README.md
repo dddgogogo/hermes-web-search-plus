@@ -58,6 +58,17 @@ python3 search.py --query "Hermes Agent latest release" --provider auto --qualit
 
 Add at least one search-capable provider for `web_search_plus`; add an extraction-capable provider for `web_extract_plus`. The setup helper stores keys in the active Hermes environment file — never commit them to the repository.
 
+### Self-hosted / no-paid-key profile
+
+For a privacy- and budget-oriented setup with no commercial API key, use the self-hosted wizard preset:
+
+```bash
+python ~/.hermes/plugins/web-search-plus/setup.py setup --preset self-hosted
+python ~/.hermes/plugins/web-search-plus/setup.py status
+```
+
+It selects the derived `self_hosted` profile: automatic search uses only your SearXNG instance and keyless Keenable, while automatic extraction uses the keyless-capable path. Configure SearXNG with `searxng.base_url` (the older `instance_url` still works); the preset enables Keenable's existing public tier without writing a key. See the [Self-hosted profile guide](docs/USER_GUIDE.md#self-hosted-profile) for prerequisites and explicit-provider behavior.
+
 Update later with:
 
 ```bash
