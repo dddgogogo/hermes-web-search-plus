@@ -758,6 +758,37 @@
         "text"
       ]
     },
+    "SemanticSpanV3": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "score": {
+          "type": "number"
+        },
+        "within_preview": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end",
+        "text",
+        "score",
+        "within_preview"
+      ]
+    },
     "ProjectedProvenanceV3": {
       "type": "object",
       "properties": {
@@ -896,6 +927,16 @@
               "type": "null"
             }
           ]
+        },
+        "span_contract_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SemanticSpanV3"
+          }
         }
       },
       "additionalProperties": false,
@@ -910,7 +951,15 @@
         "title",
         "snippet",
         "text"
-      ]
+      ],
+      "dependentRequired": {
+        "spans": [
+          "span_contract_version"
+        ],
+        "span_contract_version": [
+          "spans"
+        ]
+      }
     },
     "CacheStatus": {
       "type": "object",

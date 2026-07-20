@@ -13,7 +13,7 @@ from typing import Any, Mapping
 # This is deliberately independent from the response-envelope schema version.
 # Increment it whenever ``canonical_form`` changes. Version 4 is the first
 # typed identity after the unversioned 3.0.2 extraction-cache material.
-EXTRACTION_CACHE_IDENTITY_VERSION = 4
+EXTRACTION_CACHE_IDENTITY_VERSION = 5
 
 
 def _canonical_value(value: Any) -> Any:
@@ -62,6 +62,7 @@ class ExtractionCacheIdentityV3:
     include_images: bool
     include_raw_html: bool
     render_js: bool
+    semantic_spans: Mapping[str, Any]
     provider_selection: Mapping[str, Any]
     provider_endpoint_config: Mapping[str, Any]
     url_policy: Mapping[str, Any]
@@ -110,6 +111,7 @@ class ExtractionCacheIdentityV3:
                 "include_images": self.include_images,
                 "include_raw_html": self.include_raw_html,
                 "render_js": self.render_js,
+                "semantic_spans": dict(self.semantic_spans),
                 "provider_selection": dict(self.provider_selection),
                 "provider_endpoint_config": dict(self.provider_endpoint_config),
                 "url_policy": dict(self.url_policy),
@@ -135,6 +137,7 @@ class ExtractionCacheIdentityV3:
             "include_images",
             "include_raw_html",
             "render_js",
+            "semantic_spans",
             "provider_selection",
             "provider_endpoint_config",
             "url_policy",
@@ -155,6 +158,7 @@ class ExtractionCacheIdentityV3:
         mappings = (
             "attempt_budget",
             "effective_context_limits",
+            "semantic_spans",
             "provider_selection",
             "provider_endpoint_config",
             "url_policy",
@@ -170,6 +174,7 @@ class ExtractionCacheIdentityV3:
             include_images=value["include_images"],
             include_raw_html=value["include_raw_html"],
             render_js=value["render_js"],
+            semantic_spans=dict(value["semantic_spans"]),
             provider_selection=dict(value["provider_selection"]),
             provider_endpoint_config=dict(value["provider_endpoint_config"]),
             url_policy=dict(value["url_policy"]),

@@ -1364,6 +1364,8 @@ def _run_extract(
     include_images: bool = False,
     include_raw_html: bool = False,
     render_js: bool = False,
+    spans: bool = False,
+    spans_query: Optional[str] = None,
     subprocess_timeout: int = 90,
 ) -> dict:
     """Run URL extraction in-process (fast path), falling back to the subprocess."""
@@ -1372,14 +1374,15 @@ def _run_extract(
         return _run_extract_subprocess(
             urls, provider=provider, output_format=output_format,
             include_images=include_images, include_raw_html=include_raw_html,
-            render_js=render_js, subprocess_timeout=subprocess_timeout,
+            render_js=render_js, spans=spans, spans_query=spans_query,
+            subprocess_timeout=subprocess_timeout,
         )
 
     def call() -> dict:
         return search.run_extract_request(
             urls, provider=provider, output_format=output_format,
             include_images=include_images, include_raw_html=include_raw_html,
-            render_js=render_js,
+            render_js=render_js, spans=spans, spans_query=spans_query,
         )
 
     try:
@@ -1397,6 +1400,8 @@ def _run_extract_subprocess(
     include_images: bool = False,
     include_raw_html: bool = False,
     render_js: bool = False,
+    spans: bool = False,
+    spans_query: Optional[str] = None,
     subprocess_timeout: int = 90,
 ) -> dict:
     """Legacy fallback: call search.py extract mode and return parsed JSON result."""
@@ -1417,6 +1422,10 @@ def _run_extract_subprocess(
         cmd.append("--include-raw-html")
     if render_js:
         cmd.append("--render-js")
+    if spans:
+        cmd.append("--spans")
+    if spans_query is not None:
+        cmd.extend(["--spans-query", spans_query])
 
     env = os.environ.copy()
     try:
@@ -1615,6 +1624,13 @@ def _format_extract_results(data: dict) -> str:
             lines.append(f"Error: {r['error']}")
         elif content:
             lines.append(_format_truncated_extract_content(content, url, limit))
+        if "spans" in r:
+            lines.append(
+                "Semantic spans (contract v{}): {}".format(
+                    r.get("span_contract_version", 1),
+                    json.dumps(r["spans"], ensure_ascii=False, separators=(",", ":")),
+                )
+            )
     return "\n".join(lines).strip()
 
 
@@ -1806,6 +1822,11 @@ def register(ctx: Any) -> None:
                 "include_images": {"type": "boolean", "default": False},
                 "include_raw_html": {"type": "boolean", "default": False},
                 "render_js": {"type": "boolean", "default": False},
+                "spans": {"type": "boolean", "default": False},
+                "spans_query": {
+                    "type": "string",
+                    "description": "Optional query for deterministic semantic span ranking",
+                },
             },
             "required": ["urls"],
         },
@@ -1813,7 +1834,8 @@ def register(ctx: Any) -> None:
 
     def extract_handler(args_or_urls, provider: str = "auto", format: str = "markdown",
                         include_images: bool = False, include_raw_html: bool = False,
-                        render_js: bool = False, **kwargs) -> str:
+                        render_js: bool = False, spans: bool = False,
+                        spans_query: Optional[str] = None, **kwargs) -> str:
         if isinstance(args_or_urls, dict):
             urls = args_or_urls.get("urls", [])
             provider = args_or_urls.get("provider", provider)
@@ -1821,6 +1843,10 @@ def register(ctx: Any) -> None:
             include_images = args_or_urls.get("include_images", include_images)
             include_raw_html = args_or_urls.get("include_raw_html", include_raw_html)
             render_js = args_or_urls.get("render_js", render_js)
+            spans = args_or_urls.get("spans", spans)
+            spans_query = args_or_urls.get(
+                "spans_query", args_or_urls.get("query", spans_query)
+            )
         else:
             urls = args_or_urls
         if isinstance(urls, str):
@@ -1832,6 +1858,8 @@ def register(ctx: Any) -> None:
             include_images=include_images,
             include_raw_html=include_raw_html,
             render_js=render_js,
+            spans=spans,
+            spans_query=spans_query,
         )
         return _format_extract_results(data)
 

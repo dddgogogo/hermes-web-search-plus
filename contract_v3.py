@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
+import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -821,6 +823,12 @@ class RequestV3:
                     isinstance(option_value, bool) or not isinstance(option_value, int)
                 ):
                     raise ValueError(f"{option_name} must be an integer")
+            spans = self.options.get("spans")
+            if spans is not None and not isinstance(spans, bool):
+                raise ValueError("spans must be a boolean")
+            spans_query = self.options.get("spans_query")
+            if spans_query is not None and not isinstance(spans_query, str):
+                raise ValueError("spans_query must be a string")
 
     @classmethod
     def search(
@@ -857,6 +865,8 @@ class RequestV3:
         include_images: bool = False,
         max_urls: Optional[int] = None,
         max_context_chars: Optional[int] = None,
+        spans: bool = False,
+        spans_query: Optional[str] = None,
     ) -> "RequestV3":
         options: Dict[str, Any] = {
             "output_format": output_format,
@@ -866,6 +876,10 @@ class RequestV3:
             options["max_urls"] = max_urls
         if max_context_chars is not None:
             options["max_context_chars"] = max_context_chars
+        if spans:
+            options["spans"] = True
+        if spans_query is not None:
+            options["spans_query"] = spans_query
         return cls(
             Capability.EXTRACT,
             {"urls": list(urls)},
@@ -947,10 +961,12 @@ _BASE64_IMAGE_RE = re.compile(r"data:image/[^;]+;base64,[A-Za-z0-9+/=]+")
 
 def _validate_no_banned_fields(value: Any) -> None:
     if isinstance(value, dict):
+        span_fields = {"start", "end", "text", "score", "within_preview"}
+        is_span = set(value) == span_fields
         for key, child in value.items():
             if key in _BANNED_CANONICAL_FIELDS:
                 raise ValueError(f"banned canonical field: {key}")
-            if key == "score":
+            if key == "score" and not is_span:
                 raise ValueError("bare score is banned; use typed provider_score")
             if key == "type" and child == "synthesis":
                 raise ValueError("banned canonical type: synthesis")
@@ -1040,6 +1056,52 @@ def _validate_projected_text(
         raise ValueError("empty projected text must have no segments")
 
 
+def _validate_result_spans(
+    result: Dict[str, Any], observations: Dict[str, Dict[str, Any]]
+) -> None:
+    has_spans = "spans" in result or "span_contract_version" in result
+    if not has_spans:
+        return
+    if result.get("span_contract_version") != 1:
+        raise ValueError("span_contract_version must be 1")
+    spans = result.get("spans")
+    if not isinstance(spans, list):
+        raise ValueError("spans must be an array")
+    observation = observations.get(result.get("representative_observation_id")) or {}
+    full_text = unicodedata.normalize("NFC", str(observation.get("text") or ""))
+    previous_end = 0
+    for span in spans:
+        if not isinstance(span, dict) or set(span) != {
+            "start", "end", "text", "score", "within_preview"
+        }:
+            raise ValueError("span fields are invalid")
+        start, end = span["start"], span["end"]
+        score = span["score"]
+        if (
+            isinstance(start, bool)
+            or not isinstance(start, int)
+            or isinstance(end, bool)
+            or not isinstance(end, int)
+            or not 0 <= start < end <= len(full_text)
+            or start < previous_end
+        ):
+            raise ValueError("span offsets are invalid")
+        if span["text"] != full_text[start:end]:
+            raise ValueError("span text does not match NFC codepoint offsets")
+        if (
+            isinstance(score, bool)
+            or not isinstance(score, (int, float))
+            or not math.isfinite(score)
+        ):
+            raise ValueError("span score must be finite numeric")
+        if not isinstance(span["within_preview"], bool):
+            raise ValueError("within_preview must be boolean")
+        preview = ((result.get("text") or {}).get("text") or "")
+        if span["within_preview"] != (end <= len(preview)):
+            raise ValueError("within_preview does not match projected text")
+        previous_end = end
+
+
 def _default_diversity() -> Dict[str, Any]:
     return {
         "method": "component_count",
@@ -1119,6 +1181,7 @@ class ResponseV3:
                     if not isinstance(projected, dict):
                         raise ValueError("content-bearing result fields must be projected objects")
                     _validate_projected_text(projected, observations)
+            _validate_result_spans(result, observations)
         for action in self.policy_actions:
             reasons = _POLICY_ACTION_REASONS.get(str(action.get("action")))
             if reasons is None or action.get("reason") not in reasons:
