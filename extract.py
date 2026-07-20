@@ -580,6 +580,23 @@ def _extract_cache_identity(
     )
 
 
+def _identity_requested_provider(request) -> str:
+    return str(request.routing.get("provider") or "auto")
+
+
+def _identity_candidate_basis(request, config) -> list:
+    """Config-derived candidate list for cache identity.
+
+    Deliberately health-independent: an explicit provider is its own basis;
+    auto requests use the configured extraction priority so transient
+    cooldowns never change the cache key.
+    """
+    requested = _identity_requested_provider(request)
+    if requested != "auto":
+        return [requested]
+    return list(resolve_extract_provider_priority(config))
+
+
 def _extract_provider_endpoint_config(
     provider: str, config: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -686,15 +703,18 @@ def _extract_cache_vary(
             "query": request.options.get("spans_query"),
             "span_contract_version": 1,
         },
+        # Identity captures the request and configuration, never the transient
+        # provider plan: cooldown/health changes between two otherwise
+        # identical calls must not vary the cache key. The provider that
+        # actually served remains recorded in the cached evidence itself.
         provider_selection={
-            "requested_provider": str(request.routing.get("provider") or "auto"),
+            "requested_provider": _identity_requested_provider(request),
             "allow_fallback": bool(request.routing.get("allow_fallback", True)),
-            "selected_provider": provider_plan.selected_provider,
-            "candidate_order": list(provider_plan.candidate_order),
+            "candidate_basis": _identity_candidate_basis(request, config),
         },
         provider_endpoint_config={
             provider: _extract_provider_endpoint_config(provider, config)
-            for provider in provider_plan.candidate_order
+            for provider in _identity_candidate_basis(request, config)
         },
         url_policy={
             "allow_private_urls": _extract_allows_private_urls(config),

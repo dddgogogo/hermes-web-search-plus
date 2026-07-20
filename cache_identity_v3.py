@@ -13,7 +13,7 @@ from typing import Any, Mapping
 # This is deliberately independent from the response-envelope schema version.
 # Increment it whenever ``canonical_form`` changes. Version 4 is the first
 # typed identity after the unversioned 3.0.2 extraction-cache material.
-EXTRACTION_CACHE_IDENTITY_VERSION = 5
+EXTRACTION_CACHE_IDENTITY_VERSION = 6
 
 
 def _canonical_value(value: Any) -> Any:

@@ -367,3 +367,56 @@ def test_lossy_extract_payload_classes_never_write_cache(
 
     assert calls == 2
     assert not (tmp_path / "v3" / "response" / "extract").exists()
+
+
+def test_transient_provider_health_changes_do_not_vary_cache_identity(
+    tmp_path, monkeypatch
+):
+    """Two identical auto requests must share one cache entry even when a
+    candidate provider entered cooldown between them (the step-8 live-test
+    regression: quota -> quota_blocked must not bust the cache)."""
+    calls = 0
+
+    def fake_core(**_kwargs):
+        nonlocal calls
+        calls += 1
+        return {
+            "provider": "exa",
+            "results": [
+                {
+                    "url": "https://example.com/a",
+                    "title": "A",
+                    "content": "stable content",
+                }
+            ],
+            "routing": {
+                "provider": "exa",
+                "requested_provider": "auto",
+                "fallback_used": True,
+                "fallback_errors": [{"provider": "tavily", "error": "quota"}],
+            },
+        }
+
+    monkeypatch.setattr(extract, "_extract_plus_core", fake_core)
+    config = _config(tmp_path)
+    request = legacy_request_to_v3(
+        Capability.EXTRACT,
+        {"urls": ["https://example.com/a"], "provider": "auto"},
+    )
+
+    first = extract.run_extract_request_v3(request, config=config)
+    # Simulate the live incident: a candidate enters cooldown between calls.
+    monkeypatch.setattr(
+        extract, "provider_in_cooldown", lambda _p: (True, 120.0)
+    )
+    second = extract.run_extract_request_v3(
+        legacy_request_to_v3(
+            Capability.EXTRACT,
+            {"urls": ["https://example.com/a"], "provider": "auto"},
+        ),
+        config=config,
+    )
+
+    assert calls == 1, "second identical request must be served from cache"
+    assert second.cache_status.get("disposition") in {"fresh_hit", "stale_hit"}
+    assert first.results[0]["url"] == second.results[0]["url"]
