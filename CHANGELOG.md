@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [v3.1.0] — 2026-07-20
+
+### ✨ Added
+- Added the `self_hosted` no-paid-key operating profile. Its runtime-derived auto pools use SearXNG and keyless Keenable, preserve explicit keyed overrides with visible result metadata, and expose offline profile prerequisites through `setup.py status`.
+- Added the additive-only WSP 3.x public Provider SDK (`wsp_sdk`) with automatic `providers.d` discovery, typed startup diagnostics, fail-closed duplicate IDs, shared provider conformance checks, and `setup.py new-provider` scaffolding. New provider modules supply their own formal adapters without core registry or dispatch edits; discovered providers remain explicit-only unless they explicitly opt into the existing auto-routing gate.
+- Added persisted, deterministic Shadow quality-policy observations for auto-routed searches. Classic Routing v2 remains authoritative; the new local Operator Console aggregate reports agreement and provider divergences without storing query text.
+- Added opt-in v3 budget preflight. Provider fan-out, daily ledger quota, request deadline, and extraction context are checked before provider execution, with typed receipt evidence for deterministic degradation or zero-attempt budget failures.
+- Added deterministic Diversity Score diagnostics for quality reports: registrable-domain coverage, canonical-URL duplication, near-duplicate snippets, and research-provider mix. Research-result reranking remains explicitly opt-in.
+- Added the versioned v3 extraction-cache identity contract: request-exact URL, budget, bounded-context, extraction-control, provider-endpoint, URL-policy and retained-storage variation; lossless extraction provenance/legacy alias round-trips; and fail-closed identity-version and corrupt-entry quarantine handling.
+- Added opt-in semantic span extraction on `web_extract_plus` (`spans`/`spans_query`): deterministic query-conditioned passage selection over the NFC-normalized cleaned text with a mechanical offset contract — Unicode codepoint indices, half-open `[start,end)`, slicing invariant, and `within_preview` flags valid against the retained full text (docs/V3_SPAN_CONTRACT.md).
+- Added the read-only Operator Console endpoint `/api/v3/provider-health`: per-provider daily trend buckets (samples, errors, error rate, result counts, median latency) aggregated from persisted adaptive samples, without provider calls or stored query text.
+
+### ⚠️ Deprecated
+- The legacy pre-v3 execution modules (`cache.py` search-response caching and the non-v3 projection paths they serve) are deprecated. All public tools already execute through the native v3 orchestrator; the legacy modules remain only as compatibility shims and are planned for removal no earlier than 3.2. Operators do not need to change anything — this is an advance notice, not a behavior change.
+
 ## [v3.0.2] — 2026-07-14
 
 ### Credits

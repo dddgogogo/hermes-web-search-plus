@@ -200,6 +200,8 @@ request_defs = {
             "render_js": {"type": "boolean"},
             "max_urls": {"type": "integer"},
             "max_context_chars": {"type": "integer"},
+            "spans": {"type": "boolean"},
+            "spans_query": {"type": "string"},
         }
     ),
     "CacheRequest": obj(
@@ -379,6 +381,16 @@ response_defs = {
         },
         ("start", "end", "text"),
     ),
+    "SemanticSpanV3": obj(
+        {
+            "start": {"type": "integer", "minimum": 0},
+            "end": {"type": "integer", "minimum": 1},
+            "text": {"type": "string", "minLength": 1},
+            "score": {"type": "number"},
+            "within_preview": {"type": "boolean"},
+        },
+        ("start", "end", "text", "score", "within_preview"),
+    ),
     "ProjectedProvenanceV3": obj(
         {
             "observation_id": {"type": "string", "pattern": "^obs_"},
@@ -421,6 +433,11 @@ response_defs = {
             "title": {"anyOf": [{"$ref": "#/$defs/ProjectedTextV3"}, {"type": "null"}]},
             "snippet": {"anyOf": [{"$ref": "#/$defs/ProjectedTextV3"}, {"type": "null"}]},
             "text": {"anyOf": [{"$ref": "#/$defs/ProjectedTextV3"}, {"type": "null"}]},
+            "span_contract_version": {"type": "integer", "const": 1},
+            "spans": {
+                "type": "array",
+                "items": {"$ref": "#/$defs/SemanticSpanV3"},
+            },
         },
         (
             "result_id", "kind", "engine_rank", "representative_observation_id",
@@ -468,19 +485,38 @@ response_defs = {
             "selected_provider", "fallback_reason", "candidate_decisions",
         ),
     ),
-    "ShadowObservationV3": obj(
-        {
-            "observed": {"type": "boolean", "const": True},
-            "policy_id": {"type": "string", "minLength": 1},
-            "policy_revision": {"type": "string", "minLength": 1},
-            "selected_provider": {"type": ["string", "null"]},
-            "affected_execution": {"type": "boolean", "const": False},
-        },
-        (
-            "observed", "policy_id", "policy_revision", "selected_provider",
-            "affected_execution",
-        ),
-    ),
+    "ShadowObservationV3": {
+        "anyOf": [
+            obj(
+                {
+                    "observed": {"type": "boolean", "const": True},
+                    "policy_id": {"type": "string", "minLength": 1},
+                    "policy_revision": {"type": "string", "minLength": 1},
+                    "selected_provider": {"type": ["string", "null"]},
+                    "affected_execution": {"type": "boolean", "const": False},
+                },
+                (
+                    "observed", "policy_id", "policy_revision", "selected_provider",
+                    "affected_execution",
+                ),
+            ),
+            obj(
+                {
+                    "observed": {"type": "boolean", "const": True},
+                    "policy_id": {"type": "string", "minLength": 1},
+                    "policy_revision": {"type": "string", "minLength": 1},
+                    "selected_provider": {"type": ["string", "null"]},
+                    "shadow_provider": {"type": ["string", "null"]},
+                    "agreement": {"type": "boolean"},
+                    "affected_execution": {"type": "boolean", "const": False},
+                },
+                (
+                    "observed", "policy_id", "policy_revision", "selected_provider",
+                    "shadow_provider", "agreement", "affected_execution",
+                ),
+            ),
+        ]
+    },
     "RoutingReceipt": obj(
         {
             "policy_id": {"type": "string", "minLength": 1},
@@ -644,6 +680,10 @@ _RECEIPT_COMPLETION_FIELDS = (
     "cache_origin",
     "shadow_observation",
 )
+response_defs["ResultV3"]["dependentRequired"] = {
+    "spans": ["span_contract_version"],
+    "span_contract_version": ["spans"],
+}
 response_defs["RoutingReceipt"]["dependentRequired"] = {
     field: list(_RECEIPT_COMPLETION_FIELDS)
     for field in _RECEIPT_COMPLETION_FIELDS

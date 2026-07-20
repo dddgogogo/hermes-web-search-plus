@@ -23,7 +23,9 @@ Every response uses `Cache-Control: no-store`, `Content-Security-Policy`, `X-Con
 1. `/api/v3/overview` output;
 2. `/api/v3/receipts` output;
 3. `/api/v3/benchmark-history` output;
-4. every receipt record before journal persistence.
+4. `/api/v3/shadow-evaluation` output;
+5. `/api/v3/provider-health` output;
+6. every receipt record before journal persistence.
 
 No endpoint or writer may carry a private per-endpoint copy of this logic. The validator fails closed before serialization/write.
 
@@ -66,6 +68,62 @@ Sections:
 ### `GET /api/v3/benchmark-history?limit=N`
 
 `limit` is an integer clamped to 1–100. Records are newest first. `kind` is `search|extract`. Historical untyped records load as `search`. Missing extraction history is represented by `extract_collected=false` / `status="not_collected"`, never by a fabricated zero-result run.
+
+### `GET /api/v3/provider-health?limit=DAYS`
+
+Returns per-provider daily health buckets aggregated from persisted adaptive
+samples (`adaptive_samples_v3`, migrated legacy history) merged with the live
+rolling outcome window (`provider_stats.json`): sample count, error count/rate, total result
+count, and median latency per provider per UTC day. The window is anchored to
+the newest stored sample, defaults to 7 days, and is capped at 30. Read-only:
+the endpoint opens the state database via the fail-closed read-only path and
+never triggers provider calls. No query text, URLs, or request identifiers are
+stored or exposed.
+
+```json
+{
+  "schema_version": 1,
+  "days": 7,
+  "buckets": [
+    {
+      "provider": "serper",
+      "day": 1783296000,
+      "samples": 2,
+      "errors": 1,
+      "result_count_total": 8,
+      "median_latency_ms": 400,
+      "error_rate": 0.5
+    }
+  ]
+}
+```
+
+### `GET /api/v3/shadow-evaluation`
+
+Returns the last 30 days of persisted, aggregate-only Shadow policy observations. Query text, request IDs, scores, and provider attempts are never stored or exposed. The DTO is:
+
+```json
+{
+  "schema_version": 1,
+  "policy_id": "shadow-quality",
+  "policy_revision": "3.1",
+  "window": 2592000,
+  "total_evaluations": 0,
+  "agreement_rate": 0.0,
+  "divergences": [
+    {
+      "classic_provider": "serper",
+      "shadow_provider": "linkup",
+      "count": 1
+    }
+  ]
+}
+```
+
+`window` is seconds. `divergences` contains only disagreements and may contain a
+null `shadow_provider` when no ranked shadow candidate was available. This is a
+read-only aggregate endpoint: it MUST NOT evaluate policy, call a provider, or
+write state.
 
 ## Routing-v2 Receipt completion
 
@@ -134,14 +192,24 @@ When present:
 ```json
 {
   "observed": true,
-  "policy_id": "<id>",
-  "policy_revision": "<revision>",
-  "selected_provider": "<provider-or-null>",
+  "policy_id": "shadow-quality",
+  "policy_revision": "3.1",
+  "selected_provider": "<classic-provider>",
+  "shadow_provider": "<shadow-provider-or-null>",
+  "agreement": true,
   "affected_execution": false
 }
 ```
 
-`affected_execution` MUST be false. Shadow selection cannot alter candidate order, attempts or selected provider.
+The legacy five-field interface form (`policy_id: "shadow-interface"`,
+`policy_revision: "3.0"`, no `shadow_provider`/`agreement`) remains valid and
+journal-safe; it is emitted when shadow mode is active but no evaluation ran
+(non-auto requests, evaluator fallback).
+
+The legacy five-field observation remains accepted for 3.0 compatibility. For
+the extended observation, `agreement` MUST be boolean and `shadow_provider` MUST
+be a provider ID or null. `affected_execution` MUST be false. Shadow selection
+cannot alter candidate order, attempts or selected provider, and is read-only.
 
 ## Journal contract
 
@@ -161,6 +229,7 @@ The shared privacy choke point runs immediately before append. Journal failure i
 - `tests/fixtures/v3/ws3/overview.json`
 - `tests/fixtures/v3/ws3/receipts.json`
 - `tests/fixtures/v3/ws3/benchmark-history.json`
+- `tests/fixtures/v3/ws3/shadow-evaluation.json`
 
 Release-blocking tests require:
 

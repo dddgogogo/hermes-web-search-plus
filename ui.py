@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlsplit
 import operator_console_v3
 from cache import CACHE_DIR
 from config import load_config
+from state_store_v3 import SQLiteStateStore
 
 
 LOOPBACK_HOST = "127.0.0.1"
@@ -349,6 +350,19 @@ def _handler_class() -> type[BaseHTTPRequestHandler]:
                     **common,
                     limit=_parse_limit(parsed.query),
                 )
+            elif parsed.path == "/api/v3/provider-health":
+                payload = backend.build_provider_health(
+                    SQLiteStateStore.open_readonly(self._operator_server.state_path),
+                    days=_parse_limit(parsed.query) if parsed.query else 7,
+                    stats_path=Path(self._operator_server.cache_root)
+                    / "provider_stats.json",
+                )
+            elif parsed.path == "/api/v3/shadow-evaluation":
+                if parsed.query:
+                    raise ValueError("shadow evaluation does not accept query parameters")
+                payload = backend.build_shadow_evaluation(
+                    SQLiteStateStore.open_readonly(self._operator_server.state_path)
+                )
             else:
                 raise FileNotFoundError
             return backend.serialize_endpoint_payload(
@@ -420,7 +434,7 @@ def create_server(
     cache_root: str | Path = CACHE_DIR,
     state_path: str | Path | None = None,
     config: Mapping[str, Any] | None = None,
-    plugin_version: str = "3.0.2",
+    plugin_version: str = "3.1.0",
     snapshot_backend: Any = operator_console_v3,
     static_root: str | Path | None = None,
 ) -> ThreadingHTTPServer:

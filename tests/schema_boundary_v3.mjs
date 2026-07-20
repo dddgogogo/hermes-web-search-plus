@@ -101,6 +101,30 @@ if (validate(invalidDateTime)) {
   failures.push("schema accepts an invalid date-time");
 }
 
+// 6. Semantic spans are optional, versioned, and strict when present.
+const withSpans = JSON.parse(JSON.stringify(base));
+withSpans.results[0].span_contract_version = 1;
+withSpans.results[0].spans = [{
+  start: 0,
+  end: 4,
+  text: "test",
+  score: 1.25,
+  within_preview: true,
+}];
+if (!validate(withSpans)) {
+  failures.push(`schema rejects semantic spans: ${ajv.errorsText(validate.errors)}`);
+}
+const malformedSpan = JSON.parse(JSON.stringify(withSpans));
+delete malformedSpan.results[0].spans[0].within_preview;
+if (validate(malformedSpan)) {
+  failures.push("schema accepts a semantic span without within_preview");
+}
+const unversionedSpans = JSON.parse(JSON.stringify(withSpans));
+delete unversionedSpans.results[0].span_contract_version;
+if (validate(unversionedSpans)) {
+  failures.push("schema accepts unversioned semantic spans");
+}
+
 if (failures.length) {
   console.error("SCHEMA BOUNDARY FAILURES:\n" + failures.join("\n"));
   process.exit(1);

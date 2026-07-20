@@ -35,6 +35,20 @@ It adds two Hermes tools:
 
 Read the full [3.0 Release Notes](docs/RELEASE_NOTES_V3.md) for compatibility details and deliberate 3.1 deferrals.
 
+## What 3.1 adds
+
+3.1 ships everything 3.0 deferred, plus the quality and budget layers around it. Defaults stay bit-identical to 3.0.2 — every feature is opt-in.
+
+- **Full Shadow Observer.** A deterministic shadow routing policy runs beside Classic, persists its would-be decisions (never query text), and reports agreement and divergences in the Console — without ever affecting execution.
+- **Budget Preflight.** Call caps, daily quota, timeout and context budgets are checked before the first provider call; violations degrade deterministically or abort with a typed error instead of spending money first.
+- **Diversity Score.** Quality reports measure domain, URL, and content diversity, so ten variants of the same SEO page stop looking like ten sources. Research reranking stays opt-in.
+- **Extraction cache identity.** Request-exact, versioned cache identity with per-field provenance and fail-closed miss semantics — no wrong hits after endpoint, budget, or config changes.
+- **Self-hosted profile.** `profile: self_hosted` runs automatic routing on SearXNG and keyless Keenable only — no commercial API keys required.
+- **Semantic spans.** Opt-in query-conditioned passages on extraction with a mechanical offset contract (NFC, codepoints, half-open ranges).
+- **Public Provider SDK.** New providers are one self-contained `providers.d` module — zero core-file edits — with scaffolding and a conformance suite.
+
+Read the full [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) and [3.1 Migration](docs/V31_MIGRATION.md) for details.
+
 ---
 
 ## Quick Start
@@ -57,6 +71,17 @@ python3 search.py --query "Hermes Agent latest release" --provider auto --qualit
 ```
 
 Add at least one search-capable provider for `web_search_plus`; add an extraction-capable provider for `web_extract_plus`. The setup helper stores keys in the active Hermes environment file — never commit them to the repository.
+
+### Self-hosted / no-paid-key profile
+
+For a privacy- and budget-oriented setup with no commercial API key, use the self-hosted wizard preset:
+
+```bash
+python ~/.hermes/plugins/web-search-plus/setup.py setup --preset self-hosted
+python ~/.hermes/plugins/web-search-plus/setup.py status
+```
+
+It selects the derived `self_hosted` profile: automatic search uses only your SearXNG instance and keyless Keenable, while automatic extraction uses the keyless-capable path. Configure SearXNG with `searxng.base_url` (the older `instance_url` still works); the preset enables Keenable's existing public tier without writing a key. See the [Self-hosted profile guide](docs/USER_GUIDE.md#self-hosted-profile) for prerequisites and explicit-provider behavior.
 
 Update later with:
 
@@ -97,6 +122,9 @@ Full parameters, freshness and locale behavior, provider selection, extraction c
 ### Start & upgrade
 
 - [User Guide](docs/USER_GUIDE.md) — installation, first-run checks, tool usage, and troubleshooting
+- [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) — highlights and compatibility
+- [3.1 Migration](docs/V31_MIGRATION.md) — opt-in matrix, kill switches, verification, and rollback
+- [Provider SDK](docs/PROVIDER_SDK.md) — add a provider with one `providers.d` module
 - [3.0 Release Notes](docs/RELEASE_NOTES_V3.md) — highlights, provider changes, compatibility, and 3.1 deferrals
 - [3.0 Migration](docs/V3_MIGRATION.md) — dry run, apply, smoke tests, and rollback
 - [3.0 Compatibility](docs/V3_COMPATIBILITY.md) and [Backup & Restore](docs/V3_BACKUP_RESTORE.md) — stable surfaces and recovery behavior

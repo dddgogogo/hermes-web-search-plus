@@ -24,6 +24,10 @@ from bounded_context_v3 import (
 from config import DEFAULT_CONFIG, get_api_key, provider_configured
 from operator_receipts_v3 import JOURNAL_OWNER, JOURNAL_SCHEMA_VERSION
 from provider_registry import PROVIDER_SPECS
+from state_store_v3 import (
+    SHADOW_EVALUATION_RETENTION_SECONDS,
+    SQLiteStateStore,
+)
 
 
 SNAPSHOT_SCHEMA_VERSION = 1
@@ -31,6 +35,7 @@ BENCHMARK_OWNER = "web-search-plus:operator-benchmarks-v3"
 BENCHMARK_HISTORY_SCHEMA_VERSION = 1
 MAX_ENDPOINT_LIMIT = 100
 MAX_READ_BYTES = 8 * 1024 * 1024
+DEFAULT_SHADOW_EVALUATION_WINDOW_SECONDS = SHADOW_EVALUATION_RETENTION_SECONDS
 
 
 def _bounded_limit(value: int) -> int:
@@ -266,6 +271,126 @@ def build_benchmark_history(
     return payload
 
 
+def build_shadow_evaluation(
+    store: SQLiteStateStore,
+    *,
+    window_seconds: int = DEFAULT_SHADOW_EVALUATION_WINDOW_SECONDS,
+) -> dict[str, Any]:
+    """Build a privacy-safe aggregate for persisted shadow evaluations."""
+    window = max(0, min(int(window_seconds), SHADOW_EVALUATION_RETENTION_SECONDS))
+    summary = store.shadow_evaluation_summary(window)
+    payload = {
+        "schema_version": SNAPSHOT_SCHEMA_VERSION,
+        "policy_id": "shadow-quality",
+        "policy_revision": "3.1",
+        "window": window,
+        "total_evaluations": summary["total"],
+        "agreement_rate": summary["agreement_rate"],
+        "divergences": summary["divergences"],
+    }
+    privacy.assert_operator_payload_safe(payload)
+    return payload
+
+
+PROVIDER_HEALTH_MAX_DAYS = 30
+
+
+def _live_adaptive_sample_rows(
+    stats_path: Path,
+) -> list[tuple[str, int, int, int, int]]:
+    """Read live rolling provider samples in adaptive-sample row shape.
+
+    Live traffic records outcomes into ``provider_stats.json`` (best-effort
+    rolling window); the migrated ``adaptive_samples_v3`` table only holds
+    imported legacy history. Health trends must see both. Only provider ids
+    and numeric fields are read — malformed content yields no rows.
+    """
+    try:
+        raw = json.loads(stats_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(raw, Mapping):
+        return []
+    rows: list[tuple[str, int, int, int, int]] = []
+    for provider, samples in raw.items():
+        if provider not in PROVIDER_SPECS or not isinstance(samples, list):
+            continue
+        for sample in samples:
+            if not isinstance(sample, Mapping):
+                continue
+            try:
+                stamp = int(sample.get("t", 0) or 0)
+                latency_ms = int(round(float(sample.get("lat", 0.0) or 0.0) * 1000))
+                count = int(sample.get("n", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            if stamp <= 0:
+                continue
+            rows.append(
+                (provider, stamp, max(0, latency_ms), max(0, count), 1 if sample.get("err") else 0)
+            )
+    return rows
+
+
+def build_provider_health(
+    store: SQLiteStateStore,
+    *,
+    days: int = 7,
+    stats_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Build per-provider daily health trends from persisted adaptive samples.
+
+    Aggregates only what the state store already contains: provider ids,
+    sample times, latencies, result counts, and error flags. No queries, no
+    URLs, no provider calls.
+    """
+    bounded_days = max(1, min(int(days), PROVIDER_HEALTH_MAX_DAYS))
+    rows: list[dict[str, Any]] = []
+    samples = list(store.adaptive_sample_rows())
+    if stats_path is not None:
+        samples.extend(_live_adaptive_sample_rows(Path(stats_path)))
+    newest_ts = max((sample_time for _, sample_time, _, _, _ in samples), default=0)
+    cutoff = newest_ts - bounded_days * 86400
+    buckets: dict[tuple[str, int], dict[str, Any]] = {}
+    for provider, sample_time, latency_ms, result_count, error in samples:
+        if provider not in PROVIDER_SPECS or sample_time < cutoff:
+            continue
+        day_index = int(sample_time // 86400)
+        bucket = buckets.setdefault(
+            (provider, day_index),
+            {
+                "provider": provider,
+                "day": day_index * 86400,
+                "samples": 0,
+                "errors": 0,
+                "result_count_total": 0,
+                "latencies": [],
+            },
+        )
+        bucket["samples"] += 1
+        bucket["errors"] += 1 if error else 0
+        bucket["result_count_total"] += int(result_count)
+        bucket["latencies"].append(int(latency_ms))
+    for bucket in sorted(
+        buckets.values(), key=lambda item: (item["provider"], item["day"])
+    ):
+        latencies = sorted(bucket.pop("latencies"))
+        bucket["median_latency_ms"] = (
+            latencies[len(latencies) // 2] if latencies else None
+        )
+        bucket["error_rate"] = (
+            round(bucket["errors"] / bucket["samples"], 4) if bucket["samples"] else 0.0
+        )
+        rows.append(bucket)
+    payload = {
+        "schema_version": SNAPSHOT_SCHEMA_VERSION,
+        "days": bounded_days,
+        "buckets": rows,
+    }
+    privacy.assert_operator_payload_safe(payload)
+    return payload
+
+
 def _provider_rows(
     config: Mapping[str, Any],
     provider_ids: Sequence[str],
@@ -407,7 +532,7 @@ def build_overview(
     config: Mapping[str, Any] | None = None,
     provider_ids: Sequence[str] | None = None,
     state_path: str | Path | None = None,
-    plugin_version: str = "3.0.2",
+    plugin_version: str = "3.1.0",
     now: Callable[[], float] = time.time,
 ) -> dict[str, Any]:
     root = Path(cache_root)

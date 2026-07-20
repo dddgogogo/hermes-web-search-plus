@@ -91,9 +91,29 @@ _ENUM_VALUES = {
     },
     "search": {"collected", "not_collected"},
     "extract": {"collected", "not_collected"},
+    "action": {
+        "excluded", "reranked", "demoted", "selected_as_representative",
+        "truncated_by_limit", "budget_preflight", "degrade", "abort",
+    },
+    "reason": {
+        "spam_domain", "intent_authority", "domain_diversity",
+        "dedup_representative", "max_results", "max_content_bytes",
+        "max_context_chars", "degraded", "aborted",
+        "daily_quota_exhausted", "budget_ledger_unavailable",
+        "budget_unsatisfiable",
+    },
+    "check": {
+        "provider_call_cap", "daily_quota", "timeout_budget", "context_budget",
+    },
+    "verdict": {"ok", "exceeded"},
 }
 _PROVIDER_FIELDS = {
-    "provider", "selected_provider", "recommended_priority", "candidate_order",
+    "provider",
+    "selected_provider",
+    "shadow_provider",
+    "classic_provider",
+    "recommended_priority",
+    "candidate_order",
 }
 _EXECUTION_FIELDS = {"execution_id", "origin_execution_id"}
 _ATTEMPT_FIELDS = {"attempt_id", "current_provider_attempts"}
@@ -138,9 +158,13 @@ def _validate_string(value: str, field_name: str | None, location: str) -> None:
         return
     if field_name == "plugin_version" and _SEMVER.fullmatch(value):
         return
-    if field_name == "policy_id" and value in {"classic", "shadow-quality"}:
+    if field_name == "policy_id" and value in {
+        "classic", "shadow-quality", "shadow-interface",
+    }:
         return
-    if field_name == "policy_revision" and value in {"v2.9.1", "fixture", "1"}:
+    if field_name == "policy_revision" and value in {
+        "v2.9.1", "routing-v2", "fixture", "1", "3.0", "3.1",
+    }:
         return
     raise ValueError(f"operator payload string is not known-safe at {location}")
 

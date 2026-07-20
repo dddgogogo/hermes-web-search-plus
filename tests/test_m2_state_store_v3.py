@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 import sqlite3
+import time
 
 from contract_v3 import Capability, CircuitState, ErrorClass, SkipReason
 from errors_v3 import classify_provider_error
@@ -250,7 +251,7 @@ def test_reconcile_degrades_if_sqlite_fails_after_reservation(
 
 def test_schema_initialization_is_idempotent_and_uses_wal(tmp_path):
     path = tmp_path / "state.sqlite3"
-    SQLiteStateStore(path)
+    store = SQLiteStateStore(path)
     SQLiteStateStore(path)
 
     connection = sqlite3.connect(path)
@@ -262,3 +263,108 @@ def test_schema_initialization_is_idempotent_and_uses_wal(tmp_path):
 
     assert mode.lower() == "wal"
     assert version == SCHEMA_VERSION
+
+    no_checkpoint_on_close = getattr(
+        sqlite3, "SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE", None
+    )
+    if no_checkpoint_on_close is not None and hasattr(connection, "getconfig"):
+        owned_connection = store._connect()
+        try:
+            assert owned_connection.getconfig(no_checkpoint_on_close) is True
+        finally:
+            owned_connection.close()
+
+
+def test_schema_v3_upgrades_v2_in_place_without_losing_existing_data(tmp_path):
+    path = tmp_path / "state.sqlite3"
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE budget_ledger (
+                scope TEXT NOT NULL,
+                window_key TEXT NOT NULL,
+                limit_units INTEGER NOT NULL,
+                used_units INTEGER NOT NULL DEFAULT 0,
+                reserved_units INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (scope, window_key)
+            )
+            """
+        )
+        connection.execute(
+            "INSERT INTO budget_ledger VALUES ('existing', 'window', 5, 2, 1)"
+        )
+        connection.execute("PRAGMA user_version=2")
+
+    SQLiteStateStore(path)
+
+    with sqlite3.connect(path) as connection:
+        version = connection.execute("PRAGMA user_version").fetchone()[0]
+        row = connection.execute(
+            "SELECT limit_units, used_units, reserved_units FROM budget_ledger"
+        ).fetchone()
+        tables = {
+            item[0]
+            for item in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+
+    assert version == 3
+    assert row == (5, 2, 1)
+    assert "shadow_evaluations_v3" in tables
+
+
+def test_shadow_evaluation_record_and_summary_round_trip(tmp_path):
+    store = SQLiteStateStore(tmp_path / "state.sqlite3")
+    now = time.time()
+    assert store.record_shadow_evaluation(
+        routing_class="policy_pdf",
+        classic_provider="serper",
+        shadow_provider="serper",
+        agreement=True,
+        policy_id="shadow-quality",
+        policy_revision="3.1",
+        now=now,
+    )
+    assert store.record_shadow_evaluation(
+        routing_class="policy_pdf",
+        classic_provider="serper",
+        shadow_provider="linkup",
+        agreement=False,
+        policy_id="shadow-quality",
+        policy_revision="3.1",
+        now=now,
+    )
+
+    assert store.shadow_evaluation_summary(60) == {
+        "total": 2,
+        "agreement_count": 1,
+        "agreement_rate": 0.5,
+        "divergences": [
+            {"classic_provider": "serper", "shadow_provider": "linkup", "count": 1}
+        ],
+    }
+
+
+def test_shadow_evaluation_retention_caps_owned_rows(tmp_path, monkeypatch):
+    import state_store_v3
+
+    monkeypatch.setattr(state_store_v3, "SHADOW_EVALUATION_MAX_ROWS", 2)
+    store = SQLiteStateStore(tmp_path / "state.sqlite3")
+    for offset in range(3):
+        assert store.record_shadow_evaluation(
+            routing_class="general",
+            classic_provider="serper",
+            shadow_provider="linkup",
+            agreement=False,
+            policy_id="shadow-quality",
+            policy_revision="3.1",
+            now=1_000.0 + offset,
+        )
+
+    with sqlite3.connect(store.path) as connection:
+        rows = connection.execute(
+            "SELECT created_at FROM shadow_evaluations_v3 ORDER BY created_at"
+        ).fetchall()
+
+    assert rows == [(1_001.0,), (1_002.0,)]

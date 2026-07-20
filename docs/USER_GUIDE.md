@@ -95,6 +95,7 @@ Presets:
 - `lean`: You.com + Linkup. Small fast search plus extraction.
 - `search`: You.com + Serper + Exa + Firecrawl + Tavily + Linkup. Full default Routing v2 pool.
 - `extract`: Firecrawl + Linkup + Exa + Tavily. Extraction-heavy setup.
+- `self-hosted`: SearXNG + keyless Keenable. Enables the privacy/budget profile without a commercial API key.
 - `all`: prompt for every supported provider.
 
 Search-capable providers include You.com, Serper, Exa, Firecrawl, Tavily, Linkup, Parallel, Brave, SearXNG, SerpBase, Querit, and Keenable. Extraction-capable providers are Linkup, Firecrawl, Tavily, Exa, Parallel, You.com, Keenable, and Serper. Native Perplexity and Kilo Perplexity are not registered in 3.0 because their legacy answer endpoints do not expose a verified source-only mode.
@@ -102,6 +103,37 @@ Search-capable providers include You.com, Serper, Exa, Firecrawl, Tavily, Linkup
 Keenable is keyless: set `KEENABLE_API_KEY` for the authenticated endpoints, or opt into its public tier (off by default). In the wizard, skip the Keenable key prompt and answer yes, or run `setup.py setup keenable --keyless-public`; it writes `keenable.allow_public: true` to `config.json` (equivalently `KEENABLE_ALLOW_PUBLIC=1`).
 
 With a `KEENABLE_API_KEY` set, requests always use the authenticated endpoints. Without a key and without the opt-in, Keenable is treated as unconfigured: it won't auto-route, fall back, or enable `web_extract_plus`. When the public tier is enabled, queries and fetched URLs are sent to an **unauthenticated** public service with per-IP limits and no SLA — roughly 1,000 requests/hour and 10 requests/second — so treat it as a best-effort last resort, not a dependable provider. The first request that uses the public endpoint logs a one-time warning so the egress is visible, and `web-search-plus doctor` reports keyless providers as `key=no` with a separate `keyless=on/off` badge so key status stays truthful.
+
+### Self-hosted profile
+
+Use the `self_hosted` profile when automatic traffic must avoid commercial API keys. The quickest setup is:
+
+```bash
+python ~/.hermes/plugins/web-search-plus/setup.py setup --preset self-hosted
+python ~/.hermes/plugins/web-search-plus/setup.py status
+```
+
+The preset records the profile, enables Keenable's existing keyless public tier, and prompts only for the optional SearXNG endpoint. To configure it directly, use the canonical `searxng.base_url` name (legacy `searxng.instance_url` remains supported):
+
+```json
+{
+  "profile": "self_hosted",
+  "searxng": {
+    "base_url": "https://search.example.net"
+  }
+}
+```
+
+At load time, rather than by saving duplicate routing settings, the profile derives this effective automatic policy:
+
+- Search auto pool: SearXNG and Keenable only.
+- Fallback: keyless-capable Keenable.
+- Extraction auto pool: keyless-capable Keenable only.
+- Budget preflight limits continue to apply unchanged when configured.
+
+`setup.py status` is an offline diagnostic: it displays the active profile and effective auto pool, then checks that the SearXNG URL is present and well formed and that Keenable is configured or its keyless public tier is enabled. It never contacts either provider. If neither SearXNG nor Keenable is usable, an automatic request returns the typed `self_hosted_profile_unavailable` error with the local remediation.
+
+The profile governs only automatic routing. An explicit `provider="serper"` (or another keyed provider) still works when its key exists; its result metadata includes `"profile_deviation": true` so the paid-key deviation is visible. Explicit provider requests remain useful for diagnostics and controlled operator overrides.
 
 ### Migration note for v2.0.0
 
@@ -166,6 +198,25 @@ Semantics worth knowing:
 - `set-extract-priority` changes `provider="auto"` extraction order only. It accepts extract-capable providers, removes duplicates, and appends omitted extract providers in registry order.
 - `set-auto-allow <provider> off` keeps a configured provider available for explicit calls while preventing auto-routing/fallback from selecting it.
 - `config reset --yes` backs up the existing file before writing fresh defaults.
+
+## V3 budget preflight
+
+Budget preflight is opt-in. Before a native v3 request starts any provider attempt, it can cap the provider-call fan-out, request wall-time budget, extraction context, and the current UTC day's provider-call ledger. The default is disabled and all limits are unbounded, so existing requests are unchanged.
+
+```json
+{
+  "budget_preflight": {
+    "enabled": true,
+    "max_provider_calls_per_request": 2,
+    "max_daily_provider_calls": 100,
+    "max_timeout_seconds": 30,
+    "max_context_chars": 30000,
+    "on_exceed": "degrade"
+  }
+}
+```
+
+Set a limit to `null` to leave that dimension unbounded. With `on_exceed: "degrade"`, WSP deterministically applies the smallest compatible cap; with `"abort"`, it returns a typed budget failure before a provider call. Daily usage is checked and recorded in the existing local v3 `budget_ledger`; an unavailable ledger fails closed when a daily quota is enabled. The receipt endpoint includes the typed checks and any reduction or abort reason. Set `WSP_BUDGET_PREFLIGHT_OFF=1` for an emergency process-level override; `0`, `false`, `no`, and `off` leave configured preflight enabled.
 
 ### GroktoCrawl / local Firecrawl-compatible backends
 
@@ -389,6 +440,25 @@ Search results pass through a quality layer before they reach the agent:
 - **Adaptive routing:** every real provider call records latency, error, and empty-result outcomes (rolling window, last 50 calls / 7 days). Routing blends a bounded adjustment (±1.0) into the scores, so providers that are currently fast and productive win close calls — strong query-class signals are never overridden. Disable with `auto_routing.adaptive_routing: false` in `config.json`; adjustments are visible in `quality_report.adaptive_adjustments`.
 - **Spam/mirror filter:** results from known Stack Overflow/GitHub content mirrors and SEO scrapers are removed (reported in `metadata.spam_filtered`). Extend via `quality.blocked_domains`, rescue a domain via `quality.allowed_domains`, or disable with `quality.filter_spam: false`.
 - **Domain diversity:** at most 2 results per domain keep their position; overflow is moved behind the diverse head (`quality.max_results_per_domain`, `0` disables).
+
+### Diversity Score
+
+When quality reporting is enabled, `quality_report.diversity` explains result-set variety without changing the returned order. Its 0–1 score is a documented weighted blend: 40% registrable-domain diversity, 30% canonical-URL uniqueness, 20% snippet-content diversity, and 10% provider mix. Tracking parameters and fragments do not make URLs distinct; snippets are compared with casefolded word trigrams, and pairs at or above the configured threshold are reported as near duplicates. A single-provider set receives `provider_mix: 1.0`, because provider mix is only meaningful after a research merge.
+
+The default is diagnostic-only. To let Research Mode stably move URL/content duplicate candidates behind diverse results (never as a one-off removal), opt in with:
+
+```json
+{
+  "quality": {
+    "diversity": {
+      "rerank": true,
+      "near_duplicate_threshold": 0.6
+    }
+  }
+}
+```
+
+`near_duplicate_threshold` must be between `0.0` and `1.0`; higher values require more overlap. With `rerank: false` (the default), research merge ordering and deduplication behavior are unchanged.
 - **Explicit intent wins:** queries with `site:` operators or `include_domains` are exempt — constrained domains bypass the spam filter and the diversity rerank is skipped entirely.
 
 ## Reliability and cost controls

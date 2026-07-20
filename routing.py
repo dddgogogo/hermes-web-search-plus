@@ -3,10 +3,24 @@
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from config import DEFAULT_CONFIG, get_api_key
-from provider_registry import DEFAULT_PROVIDER_PRIORITY, PROVIDER_SPECS
+from config import (
+    DEFAULT_CONFIG,
+    apply_profile_effects,
+    get_api_key,
+    keyless_public_allowed,
+    self_hosted_profile_error,
+)
+from provider_registry import DEFAULT_AUTO_ALLOW, DEFAULT_PROVIDER_PRIORITY, PROVIDER_SPECS
 from provider_stats import performance_adjustments
 from quality import _choose_tie_winner
+
+
+def provider_configured(provider: str, config: Dict[str, Any] | None = None) -> bool:
+    """Whether a provider can run: keyed via this module's (sync-patchable)
+    ``get_api_key`` binding, or keyless with its public endpoint opted in."""
+    if get_api_key(provider, config):
+        return True
+    return keyless_public_allowed(provider, config)
 
 
 ROUTING_POLICY = "routing-v2"
@@ -992,6 +1006,12 @@ class QueryAnalyzer:
             "searxng": privacy_score,  # SearXNG for privacy/multi-source queries
             "firecrawl": discovery_score + (research_score * 0.35) + (recency_score * 0.25),
         }
+        if self.config.get("profile") == "self_hosted":
+            # Keenable participates only in the profile that owns this
+            # keyless automatic pool, preserving standard-profile scoring.
+            provider_scores["keenable"] = (
+                (rag_score * 0.7) + (research_score * 0.35) + (recency_score * 0.35)
+            )
         self._apply_vnext_routing_boosts(
             query,
             provider_scores,
@@ -1014,6 +1034,8 @@ class QueryAnalyzer:
             "searxng": privacy_matches,
             "firecrawl": discovery_matches + research_matches,
         }
+        if self.config.get("profile") == "self_hosted":
+            provider_matches["keenable"] = rag_matches + research_matches
 
         return {
             "query": query,
@@ -1043,11 +1065,11 @@ class QueryAnalyzer:
         # Providers with auto_allow=false remain available for explicit calls.
         auto_excluded = [
             p for p in scores
-            if get_api_key(p, self.config) and p not in disabled and not _provider_auto_allowed(p, self.auto_config)
+            if provider_configured(p, self.config) and p not in disabled and not _provider_auto_allowed(p, self.auto_config)
         ]
         available = {
             p: s for p, s in scores.items()
-            if p not in disabled and _provider_auto_allowed(p, self.auto_config) and get_api_key(p, self.config)
+            if p not in disabled and _provider_auto_allowed(p, self.auto_config) and provider_configured(p, self.config)
         }
 
         if not available:
@@ -1163,6 +1185,20 @@ def auto_route_provider(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
     Intelligently route query to the best provider.
     Returns detailed routing decision with confidence.
     """
+    config = apply_profile_effects(config)
+    profile_error = self_hosted_profile_error(config)
+    if profile_error is not None:
+        return {
+            "provider": None,
+            "confidence": 0.0,
+            "confidence_level": "low",
+            "reason": profile_error.error_type,
+            "error": str(profile_error),
+            "error_type": profile_error.error_type,
+            "scores": {},
+            "top_signals": [],
+            "auto_routed": True,
+        }
     auto_config = config.get("auto_routing", DEFAULT_CONFIG["auto_routing"])
     if auto_config.get("enabled", True) is False:
         default_provider = config.get("default_provider")
@@ -1192,6 +1228,7 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Provide detailed explanation of routing decision for debugging.
     """
+    config = apply_profile_effects(config)
     analyzer = QueryAnalyzer(config)
     analysis = analyzer.analyze(query)
     routing = analyzer.route(query)
@@ -1241,8 +1278,12 @@ def explain_routing(query: str, config: Dict[str, Any]) -> Dict[str, Any]:
             if matches
         },
         "available_providers": [
-            p for p in ["serper", "serpbase", "brave", "tavily", "linkup", "querit", "exa", "firecrawl", "perplexity", "kilo-perplexity", "you", "searxng"]
-            if get_api_key(p, config) and p not in config.get("auto_routing", {}).get("disabled_providers", []) and _provider_auto_allowed(p, config.get("auto_routing", {}))
+            provider
+            for provider, spec in PROVIDER_SPECS.items()
+            if spec.supports_search
+            and provider_configured(provider, config)
+            and provider not in config.get("auto_routing", {}).get("disabled_providers", [])
+            and _provider_auto_allowed(provider, config.get("auto_routing", {}))
         ]
     }
 
@@ -1253,6 +1294,7 @@ def _provider_auto_allowed(provider: str, auto_config: Dict[str, Any]) -> bool:
     experimental providers from receiving user queries automatically.
     """
     auto_allow = auto_config.get("auto_allow", {}) if isinstance(auto_config, dict) else {}
+    default_allowed = bool(DEFAULT_AUTO_ALLOW.get(provider, True))
     if not isinstance(auto_allow, dict):
-        return True
-    return bool(auto_allow.get(provider, True))
+        return default_allowed
+    return bool(auto_allow.get(provider, default_allowed))

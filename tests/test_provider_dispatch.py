@@ -116,6 +116,8 @@ class SearchAdapterKwargParityTests(unittest.TestCase):
         parser = search.build_parser(config)
         args = parser.parse_args(["--query", "q"])
         for provider, adapter in sorted(provider_dispatch.SEARCH_DISPATCH.items()):
+            if provider not in EXPECTED_SEARCH_FUNCTION:
+                continue
             recorder = _Recorder(provider, "search")
             namespace = {EXPECTED_SEARCH_FUNCTION[provider]: recorder}
             result = adapter(namespace, provider, args, "test-key" if provider != "searxng" else None, config, {})
@@ -137,6 +139,8 @@ class ExtractAdapterKwargParityTests(unittest.TestCase):
     def test_adapters_build_the_same_kwargs_as_the_old_chain(self):
         config = search._deepcopy_default_config()
         for provider, adapter in sorted(provider_dispatch.EXTRACT_DISPATCH.items()):
+            if provider not in EXPECTED_EXTRACT_KWARGS:
+                continue
             recorder = _Recorder(provider, "extract")
             namespace = {"extract_" + provider: recorder}
             result = adapter(namespace, provider, ["https://example.com"], "test-key", "markdown", False, False, False, config, False)

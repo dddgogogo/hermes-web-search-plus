@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import sqlite3
+import time
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -80,6 +81,35 @@ def test_benchmark_history_reads_only_marker_owned_records(tmp_path: Path) -> No
         "availability": {"search": "not_collected", "extract": "not_collected"},
     }
     assert foreign.read_bytes() == before
+
+
+def test_shadow_evaluation_builder_matches_frozen_aggregate_fixture(
+    tmp_path: Path,
+) -> None:
+    console = importlib.import_module("operator_console_v3")
+    state = importlib.import_module("state_store_v3").SQLiteStateStore(
+        tmp_path / "state.sqlite3"
+    )
+    now = time.time()
+    for agreement, shadow_provider in (
+        (True, "serper"),
+        (False, "linkup"),
+        (False, "linkup"),
+    ):
+        assert state.record_shadow_evaluation(
+            routing_class="policy_pdf",
+            classic_provider="serper",
+            shadow_provider=shadow_provider,
+            agreement=agreement,
+            policy_id="shadow-quality",
+            policy_revision="3.1",
+            now=now,
+        )
+
+    assert console.build_shadow_evaluation(state) == fixture("shadow-evaluation.json")
+    assert console.serialize_endpoint_payload(
+        console.build_shadow_evaluation(state)
+    ).endswith(b"\n")
 
 
 def test_overview_is_truthful_when_owned_state_is_absent(
@@ -172,3 +202,134 @@ def test_overview_refuses_symlinked_cache_and_state_ancestors(
     assert payload["engine"]["state_available"] is False
     assert payload["cache"]["response_entries"] == 0
     assert payload["circuits"]["open"] == 0
+
+
+def _state_store_with_samples(tmp_path: Path, samples):
+    state_store = importlib.import_module("state_store_v3")
+    db_path = tmp_path / "state.sqlite3"
+    connection = sqlite3.connect(db_path)
+    state_store.initialize_state_schema(connection)
+    connection.executemany(
+        """
+        INSERT INTO adaptive_samples_v3
+            (provider, source_index, sample_time, latency_ms, result_count,
+             error, source_digest, migrated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'digest', 0)
+        """,
+        samples,
+    )
+    connection.commit()
+    connection.close()
+    return state_store.SQLiteStateStore.open_readonly(db_path)
+
+
+def test_provider_health_aggregates_daily_samples_from_state_store(
+    tmp_path: Path,
+) -> None:
+    console = importlib.import_module("operator_console_v3")
+    day = 86400
+    store = _state_store_with_samples(
+        tmp_path,
+        [
+            ("serper", 0, 10 * day + 100, 200, 5, 0),
+            ("serper", 1, 10 * day + 200, 400, 3, 1),
+            ("serper", 2, 11 * day + 100, 300, 4, 0),
+            ("brave", 0, 11 * day + 100, 150, 6, 0),
+        ],
+    )
+
+    payload = console.build_provider_health(store, days=7)
+
+    assert payload == {
+        "schema_version": 1,
+        "days": 7,
+        "buckets": [
+            {
+                "provider": "brave",
+                "day": 11 * day,
+                "samples": 1,
+                "errors": 0,
+                "result_count_total": 6,
+                "median_latency_ms": 150,
+                "error_rate": 0.0,
+            },
+            {
+                "provider": "serper",
+                "day": 10 * day,
+                "samples": 2,
+                "errors": 1,
+                "result_count_total": 8,
+                "median_latency_ms": 400,
+                "error_rate": 0.5,
+            },
+            {
+                "provider": "serper",
+                "day": 11 * day,
+                "samples": 1,
+                "errors": 0,
+                "result_count_total": 4,
+                "median_latency_ms": 300,
+                "error_rate": 0.0,
+            },
+        ],
+    }
+
+
+def test_provider_health_bounds_days_and_windows_from_newest_sample(
+    tmp_path: Path,
+) -> None:
+    console = importlib.import_module("operator_console_v3")
+    day = 86400
+    store = _state_store_with_samples(
+        tmp_path,
+        [
+            ("serper", 0, 1 * day, 100, 1, 0),
+            ("serper", 1, 40 * day, 100, 1, 0),
+        ],
+    )
+
+    payload = console.build_provider_health(store, days=99999)
+
+    assert payload["days"] == console.PROVIDER_HEALTH_MAX_DAYS
+    assert [bucket["day"] for bucket in payload["buckets"]] == [40 * day]
+
+
+def test_provider_health_handles_missing_state_database(tmp_path: Path) -> None:
+    console = importlib.import_module("operator_console_v3")
+    state_store = importlib.import_module("state_store_v3")
+    store = state_store.SQLiteStateStore.open_readonly(tmp_path / "absent.sqlite3")
+
+    payload = console.build_provider_health(store, days=7)
+
+    assert payload == {"schema_version": 1, "days": 7, "buckets": []}
+
+
+def test_provider_health_includes_live_rolling_stats(tmp_path: Path) -> None:
+    console = importlib.import_module("operator_console_v3")
+    day = 86400
+    store = _state_store_with_samples(
+        tmp_path, [("serper", 0, 10 * day + 100, 200, 5, 0)]
+    )
+    stats_path = tmp_path / "provider_stats.json"
+    stats_path.write_text(
+        json.dumps(
+            {
+                "serper": [{"t": 10 * day + 500, "lat": 0.4, "n": 3, "err": True}],
+                "brave": [{"t": 10 * day + 600, "lat": 0.15, "n": 6, "err": False}],
+                "not-a-provider": [{"t": 10 * day, "lat": 1.0, "n": 1, "err": False}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = console.build_provider_health(store, days=7, stats_path=stats_path)
+
+    buckets = {(b["provider"], b["day"]): b for b in payload["buckets"]}
+    serper = buckets[("serper", 10 * day)]
+    assert serper["samples"] == 2
+    assert serper["errors"] == 1
+    assert serper["result_count_total"] == 8
+    brave = buckets[("brave", 10 * day)]
+    assert brave["samples"] == 1
+    assert brave["median_latency_ms"] == 150
+    assert ("not-a-provider", 10 * day) not in buckets
