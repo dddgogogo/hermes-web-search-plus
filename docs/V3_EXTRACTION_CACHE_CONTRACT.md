@@ -20,7 +20,7 @@ Every cacheable extraction request has one typed `ExtractionCacheIdentityV3` obj
 | Effective context limits | Applied `max_urls` and `max_context_chars` | Bound changes that affect execution or output miss. |
 | Extraction controls | `output_format`, `include_images`, `include_raw_html`, `render_js` | Each control varies independently. |
 | Provider selection | Requested provider, fallback permission, and the config-derived candidate basis | Identity is deliberately health-independent: transient cooldowns or the provider that happened to serve never vary the key; the serving provider stays recorded in the cached evidence. |
-| Provider endpoint configuration | Effective, non-secret extractor settings for every candidate | Endpoint, timeout, Parallel extraction limit/model and keyless mode changes miss; this includes `serper.scrape_url`. |
+| Provider endpoint configuration | Effective, non-secret extractor settings for every candidate | Endpoint, timeout, Parallel extraction limit/model and keyless mode changes miss; this includes `serper.scrape_url`. Discovered Provider-SDK extraction providers contribute their spec's config section restricted to non-secret scalar settings (credential-shaped keys are excluded); unknown, unregistered providers still fail closed. |
 | URL policy | Effective private/internal URL permission | A policy transition cannot serve a previous entry. |
 | Semantic spans | Effective span options (`spans`, `spans_query`, span limits) | Span-enabled and span-free requests never share an entry; a different span query misses. |
 | Full-text storage policy | Opaque storage-root fingerprint, TTL and owned-byte limit | Retained-content namespace or retention changes miss. |
