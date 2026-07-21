@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v3.1.2] — 2026-07-21
+
+### 🐛 Fixed
+- Extraction requests served by discovered Provider-SDK extraction providers no longer fail closed inside the cache identity. SDK providers now contribute a deterministic identity derived from their spec and the non-secret scalar settings of their config section (credential-shaped keys are excluded, because the identity is persisted with cached evidence). Unknown, unregistered providers still fail closed.
+- The `providers.d` non-production gate now acts before module execution: modules declaring a literal `production=False` are skipped without being imported unless `WSP_SDK_ALLOW_NON_PRODUCTION` is set. Previously such modules were excluded from the registry but their module-level code still ran. The post-import gate remains as the authoritative backstop for dynamically computed flags.
+
 ## [v3.1.1] — 2026-07-20
 
 ### 🐛 Fixed
