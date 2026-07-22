@@ -10,7 +10,15 @@
   <img alt="Hermes Plugin" src="https://img.shields.io/badge/Hermes-plugin-a78bfa.svg">
 </p>
 
-**Web Search Plus is the source-only web layer for Hermes: one search tool, one extraction tool, and a provider mesh with conservative routing and honest execution metadata.** It searches and extracts across the providers you configure, without locking you into a single API or adding an answer-synthesis layer. Web Search Plus gathers and structures sources; it does not synthesize or verify truth.
+**Web Search Plus connects your agent to the web — honest, source-first, no fluff.** It is not a tool that hands you a pre-baked answer: you get the real sources, and you always see how they were found.
+
+**New in 3.2 — and why it is genuinely fun now:**
+
+- 🔑 **Search with zero paid API keys.** The new local **Hound** integration runs key-free, right on your own machine.
+- 🧭 **Careful, predictable routing** across 13 search and 9 extract providers — deliberate choice, safe fallbacks, no surprise costs.
+- 🧾 **Honest details on every call** — which provider ran, what failed, what came from cache. Nothing fails silently.
+
+All sources, zero invented answers.
 
 It adds two Hermes tools:
 
