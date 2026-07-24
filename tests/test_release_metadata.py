@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.2.0"
+EXPECTED_VERSION = "3.3.0"
 
 
 def _load_plugin_module():
@@ -42,3 +42,28 @@ def test_release_version_surfaces_are_in_sync():
 
 def test_runtime_requirements_stay_stdlib_only():
     assert (ROOT / "requirements.txt").read_text().strip() == ""
+
+
+def test_ci_ruff_policy_is_repo_local_and_pinned():
+    policy = (ROOT / "ruff.toml").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    requirements = (ROOT / "requirements-dev.txt").read_text()
+
+    assert 'select = ["E4", "E7", "E9", "F"]' in policy
+    assert "ruff check --config ruff.toml ." in workflow
+    assert "ruff==0.15.12" in requirements
+
+
+def test_v33_release_surfaces_preserve_upstream_attribution():
+    readme = (ROOT / "README.md").read_text()
+    changelog = (ROOT / "CHANGELOG.md").read_text()
+    release_notes = (ROOT / "docs/RELEASE_NOTES_V33.md").read_text()
+    user_guide = (ROOT / "docs/USER_GUIDE.md").read_text()
+    combined = "\n".join((readme, changelog, release_notes, user_guide))
+
+    assert "Current release: **v3.3.0**" in readme
+    assert "docs/RELEASE_NOTES_V33.md" in readme
+    assert "https://github.com/dondai1234/master-fetch" in combined
+    assert "Bishesh Bhandari" in combined
+    assert "MIT-licensed" in combined or "MIT project" in combined
+    assert "https://github.com/dondai1234/hound" not in combined

@@ -155,10 +155,10 @@ the recommended default.
 
 ## Attribution and licenses
 
-- Hound / `hound-mcp`: Copyright Bishesh Bhandari, MIT License
-- Hound repository: https://github.com/dondai1234/master-fetch
-- Web Search Plus: separate MIT-licensed project and MCP client integration
+- Hound / `hound-mcp` / Master-Fetch: independent MIT project by Bishesh Bhandari ([`dondai1234`](https://github.com/dondai1234))
+- Upstream repository: https://github.com/dondai1234/master-fetch
+- Web Search Plus: separate MIT project with its own MCP client adapter
 
-Web Search Plus ships only its independent adapter. Hound's package, code,
-models, browser dependencies, and their licenses remain part of the separate
-Hound installation.
+The WSP integration ports and adapts the provider-integration idea only. It is **not Robby's Hound code**: WSP does not bundle, fork, modify, or claim ownership of Hound/Master-Fetch. Hound's package, code, models, browser dependencies, and licenses remain part of the separate Hound installation.
+
+For v3.1, the adapter preserves Hound `source_type` for both Search and Extract. WSP normalizes that input into its own provider-neutral heuristic `source_type` object with an explicit method/version and confidence; it does not treat the Hound label as certainty or as an engine-owned classification fact.

@@ -12,11 +12,11 @@
 
 **Web Search Plus connects your agent to the web — honest, source-first, no fluff.** It is not a tool that hands you a pre-baked answer: you get the real sources, and you always see how they were found.
 
-**New in 3.2 — and why it is genuinely fun now:**
+**New in 3.3 — better evidence, less waiting:**
 
-- 🔑 **Search with zero paid API keys.** The new local **Hound** integration runs key-free, right on your own machine.
-- 🧭 **Careful, predictable routing** across 13 search and 9 extract providers — deliberate choice, safe fallbacks, no surprise costs.
-- 🧾 **Honest details on every call** — which provider ran, what failed, what came from cache. Nothing fails silently.
+- 🧩 **Heading-aware extraction spans** keep the useful body beneath a matching heading instead of returning an isolated keyword sentence.
+- 🧾 **Provenance-safe result enrichment** merges corroborating snippets without losing their observation IDs, then adds explainable `source_type` and `fetch_priority` hints.
+- ⚡ **Quality-quorum Research** harvests providers as they finish and can stop waiting once enough diverse evidence exists, while every preempted provider remains visible.
 
 All sources, zero invented answers.
 
@@ -27,7 +27,7 @@ It adds two Hermes tools:
 
 > Ported from [web-search-plus-plugin](https://github.com/robbyczgw-cla/web-search-plus-plugin) for the [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin API.
 
-Current release: **v3.2.0** — see the [Changelog](CHANGELOG.md) and [3.2 Release Notes](docs/RELEASE_NOTES_V32.md).
+Current release: **v3.3.0** — see the [Changelog](CHANGELOG.md) and [3.3 Release Notes](docs/RELEASE_NOTES_V33.md).
 
 ---
 
@@ -43,7 +43,7 @@ The same two tools since 2.x — what changed underneath is how much you can tru
 - **Quality you can measure.** Reports score domain, URL, and content diversity, so ten copies of the same SEO page stop counting as ten sources.
 - **Runs with zero paid keys** if you want: the opt-in self-hosted profile uses SearXNG plus Keenable's public tier, while the optional Hound integration provides local keyless search and extraction over MCP.
 
-Everything new since 3.0 is opt-in; defaults stay stable across upgrades. Full details: [3.2 Release Notes](docs/RELEASE_NOTES_V32.md) · [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) · [3.0 Release Notes](docs/RELEASE_NOTES_V3.md).
+Everything new since 3.0 is additive or opt-in; defaults stay stable across upgrades. Full details: [3.3 Release Notes](docs/RELEASE_NOTES_V33.md) · [3.2 Release Notes](docs/RELEASE_NOTES_V32.md) · [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) · [3.0 Release Notes](docs/RELEASE_NOTES_V3.md).
 
 ---
 
@@ -138,7 +138,7 @@ Full parameters, freshness and locale behavior, provider selection, extraction c
 
 - **Installing or configuring providers** → [User Guide](docs/USER_GUIDE.md) · [Hound local provider](docs/HOUND.md)
 - **Upgrading from 2.x** → [3.0 Migration](docs/V3_MIGRATION.md), then [3.1 Migration](docs/V31_MIGRATION.md)
-- **What changed** → [Changelog](CHANGELOG.md) · [3.2 Release Notes](docs/RELEASE_NOTES_V32.md)
+- **What changed** → [Changelog](CHANGELOG.md) · [3.3 Release Notes](docs/RELEASE_NOTES_V33.md)
 - **Troubleshooting** → [FAQ](docs/FAQ.md) · [Operator Console](docs/V3_OPERATOR_CONSOLE.md)
 - **Building a provider** → [Provider SDK](docs/PROVIDER_SDK.md) · [Architecture](docs/ARCHITECTURE.md)
 
@@ -147,6 +147,7 @@ The full reference, including the normative v3 contracts for implementers and re
 ### Start & upgrade
 
 - [User Guide](docs/USER_GUIDE.md) — installation, first-run checks, tool usage, and troubleshooting
+- [3.3 Release Notes](docs/RELEASE_NOTES_V33.md) — heading-aware spans, provenance enrichment, Research quorum, compatibility, and attribution
 - [3.2 Release Notes](docs/RELEASE_NOTES_V32.md) — local Hound integration, keyless trade-offs, compatibility, and attribution
 - [Hound local provider](docs/HOUND.md) — separate installation, loopback service, verification, privacy, and operating costs
 - [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) — 3.1 highlights and compatibility

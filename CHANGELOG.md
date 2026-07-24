@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [v3.3.0] — 2026-07-24
+
+### ✨ Added
+- Bounded heading-aware semantic spans: a query-relevant ATX Markdown heading now retains its own section, including deeper subheadings and query-free body text, through the next same-or-shallower heading. Selection remains deterministic and offset-safe, with a two-section cap and a hard 1,200-codepoint cap per heading section.
+- Research Mode now harvests provider completions as they arrive and can stop waiting once a conservative, configurable quality quorum has been reached. Public result and diagnostic order remain deterministic, while preempted providers are reported explicitly as `preempted_after_quorum` rather than disappearing.
+
+### ✨ v3.1 result enrichment
+- Added additive, provenance-safe cross-provider snippet aggregation for canonical-URL clusters. Every retained snippet fragment names its `observation_id` and `source_field`; the wire validator reconstructs aggregate text from the validated fragments and explicit separator. Identical/contained fragments are deterministically deduplicated and aggregate previews stop at 600 characters without losing fragment attribution.
+- Added provider-neutral heuristic `source_type` (`value`, `method`, `method_version`, `confidence`) plus explainable per-result `fetch_priority` tiers with closed reason codes derived from cluster consensus, rank, and source-type authority. These fields are structured hints, not truth or quality claims.
+- Aligned Hound search with extraction by preserving Hound's `source_type` signal for WSP's normalized heuristic projection; `fetch_relevance` and `engines_consensus` remain available as adapter evidence.
+
+### 🐛 Fixed
+- Explicit `--research-providers` now bypass the automatic-routing allowlist, matching explicit single-provider semantics while still honoring disabled, unconfigured, and cooldown safety gates. Cooldown omissions remain visible in both routing and quality receipts instead of silently disappearing.
+- Research quorum evidence now scans all unique candidates from completed providers instead of stopping after the first provider fills the public result target. Later providers can therefore satisfy the provider-diversity requirement while the returned result page remains capped normally.
+
+### Credits
+- The independently implemented heading-aware interaction is inspired by [Hound/Master-Fetch v11.2.0](https://github.com/dondai1234/master-fetch), the independent MIT project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234). This recognizes respectful upstream collaboration; WSP does not import, fork, or copy Hound/Master-Fetch code.
+- Hound/Master-Fetch is an independent MIT project by Bishesh Bhandari ([`dondai1234`](https://github.com/dondai1234)), https://github.com/dondai1234/master-fetch. WSP ports and adapts the integration idea through its own adapter; this is not Robby's Hound code and does not bundle, fork, or claim ownership of Hound.
+- The completion-order and quality-quorum design adapts ideas from [Hound/Master-Fetch v11.2.0](https://github.com/dondai1234/master-fetch/releases/tag/v11.2.0), the independent MIT-licensed project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234). The WSP implementation was reworked for its own provider, budget, provenance, and receipt contracts.
+
 ## [v3.2.0] — 2026-07-22
 
 ### ✨ Added
