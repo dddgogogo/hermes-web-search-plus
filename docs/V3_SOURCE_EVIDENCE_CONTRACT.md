@@ -139,6 +139,22 @@ sha256(projected_text.text UTF-8) == projected_text.text_sha256
 
 `deterministic_truncation` additionally requires a `truncated_by_limit` policy action for the same observation.
 
+### 3.1 v3.1 additive multi-observation snippet projection
+
+The single-source contract above remains valid unchanged. A canonical-URL cluster MAY additionally project a `snippet` with `origin: "engine"` and this aggregate provenance shape:
+
+```text
+provenance: {
+  aggregation: "concat",
+  separator: non-empty literal string,
+  fragments: [{ observation_id, source_field, text, transformations }, ...]
+}
+```
+
+Each fragment MUST resolve its own `observation_id` and `source_field`, validate under the existing transformation rules, and be unique by `(observation_id, source_field)`. The final projection is **not** generated text: it MUST equal `separator.join(validated fragment text)` exactly. The validator reconstructs this value before accepting the hash and mechanical segments. Runtime aggregation uses `"\n\n"`, removes equal/contained snippets through a stable evidence ordering, and caps the final snippet at 600 Unicode code points; any shortened fragment carries its own `deterministic_truncation` transformation so no text is ambiguously attributed.
+
+`ResultV3.source_type` is an optional, provider-neutral heuristic object `{value, method, method_version, confidence}` where `value` is one of `docs`, `paper`, `repo`, `blog`, `forum`, `reference`, `news`, or `other`. It is structured classification evidence, never a certainty claim. `ResultV3.fetch_priority` is an optional `{tier: high|medium|low, reason_codes[]}` with only closed codes for cluster consensus, rank band, and source-type authority. It explains fetch ordering without free-form agent prose.
+
 ## 5. PolicyActionV3
 
 Every transformation that shapes `results[]` MUST be explicit:

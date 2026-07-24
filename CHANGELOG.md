@@ -5,8 +5,14 @@
 ### ✨ Added
 - Bounded heading-aware semantic spans: a query-relevant ATX Markdown heading now retains its own section, including deeper subheadings and query-free body text, through the next same-or-shallower heading. Selection remains deterministic and offset-safe, with a two-section cap and a hard 1,200-codepoint cap per heading section.
 
+### ✨ v3.1 result enrichment
+- Added additive, provenance-safe cross-provider snippet aggregation for canonical-URL clusters. Every retained snippet fragment names its `observation_id` and `source_field`; the wire validator reconstructs aggregate text from the validated fragments and explicit separator. Identical/contained fragments are deterministically deduplicated and aggregate previews stop at 600 characters without losing fragment attribution.
+- Added provider-neutral heuristic `source_type` (`value`, `method`, `method_version`, `confidence`) plus explainable per-result `fetch_priority` tiers with closed reason codes derived from cluster consensus, rank, and source-type authority. These fields are structured hints, not truth or quality claims.
+- Aligned Hound search with extraction by preserving Hound's `source_type` signal for WSP's normalized heuristic projection; `fetch_relevance` and `engines_consensus` remain available as adapter evidence.
+
 ### Credits
 - The independently implemented heading-aware interaction is inspired by [Hound/Master-Fetch v11.2.0](https://github.com/dondai1234/master-fetch), the independent MIT project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234). This recognizes respectful upstream collaboration; WSP does not import, fork, or copy Hound/Master-Fetch code.
+- Hound/Master-Fetch is an independent MIT project by Bishesh Bhandari ([`dondai1234`](https://github.com/dondai1234)), https://github.com/dondai1234/master-fetch. WSP ports and adapts the integration idea through its own adapter; this is not Robby's Hound code and does not bundle, fork, or claim ownership of Hound.
 
 ## [v3.2.0] — 2026-07-22
 
