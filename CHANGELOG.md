@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v3.3.0] — 2026-07-24
+
 ### ✨ Added
 - Bounded heading-aware semantic spans: a query-relevant ATX Markdown heading now retains its own section, including deeper subheadings and query-free body text, through the next same-or-shallower heading. Selection remains deterministic and offset-safe, with a two-section cap and a hard 1,200-codepoint cap per heading section.
 - Research Mode now harvests provider completions as they arrive and can stop waiting once a conservative, configurable quality quorum has been reached. Public result and diagnostic order remain deterministic, while preempted providers are reported explicitly as `preempted_after_quorum` rather than disappearing.
@@ -18,7 +20,7 @@
 ### Credits
 - The independently implemented heading-aware interaction is inspired by [Hound/Master-Fetch v11.2.0](https://github.com/dondai1234/master-fetch), the independent MIT project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234). This recognizes respectful upstream collaboration; WSP does not import, fork, or copy Hound/Master-Fetch code.
 - Hound/Master-Fetch is an independent MIT project by Bishesh Bhandari ([`dondai1234`](https://github.com/dondai1234)), https://github.com/dondai1234/master-fetch. WSP ports and adapts the integration idea through its own adapter; this is not Robby's Hound code and does not bundle, fork, or claim ownership of Hound.
-- The completion-order and quality-quorum design adapts ideas from [Hound/Master-Fetch v11.2.0](https://github.com/dondai1234/hound/releases/tag/v11.2.0), the independent MIT-licensed project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234). The WSP implementation was reworked for its own provider, budget, provenance, and receipt contracts.
+- The completion-order and quality-quorum design adapts ideas from [Hound/Master-Fetch v11.2.0](https://github.com/dondai1234/master-fetch/releases/tag/v11.2.0), the independent MIT-licensed project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234). The WSP implementation was reworked for its own provider, budget, provenance, and receipt contracts.
 
 ## [v3.2.0] — 2026-07-22
 
