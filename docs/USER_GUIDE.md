@@ -499,7 +499,8 @@ The plugin is designed to fail visibly rather than invent confidence.
 - Use `--no-cache` in CLI tests when you need a fresh provider call.
 - Transient provider errors are retried with short backoff.
 - Repeated provider failures put that provider on cooldown, stepping from 1 minute to 5 minutes to 25 minutes to 1 hour.
-- Research mode checks `research_time_budget` between provider calls and extraction steps; it is best-effort, not a provider-side billing limit.
+- Research mode harvests providers in completion order but keeps the public result order deterministic. By default it may stop waiting after at least two providers contribute a sufficiently diverse result head; every provider skipped by this optimization remains visible as `preempted_after_quorum` in routing diagnostics. Tune or disable this under `quality.research_quorum` (`enabled`, `min_contributing_providers`, `result_target_cap`, `min_unique_domains`). This design adapts ideas from the independent MIT-licensed [Hound/Master-Fetch](https://github.com/dondai1234/hound) project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234), reworked for WSP's contracts.
+- `research_time_budget` remains a best-effort wall-clock bound, not a provider-side billing limit.
 - Missing extraction keys, empty results, quota failures, and budget exhaustion are returned as warnings or metadata where possible.
 
 The plugin cannot normalize or guarantee provider pricing. Provider APIs own their own billing, rate limits, index freshness, and terms.
