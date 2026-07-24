@@ -56,15 +56,37 @@ NFC text stored for page-on-demand access.
 With `spans: false` (the default), neither `spans` nor
 `span_contract_version` is added, preserving the existing response shape.
 
+## Heading-aware section retention
+
+When a query term occurs in an ATX Markdown heading (`#` through `######`),
+selection explicitly retains that heading's section even if its body has no
+query terms. The section starts at the matching heading and ends immediately
+before the next heading at the same or a shallower level; deeper subheadings
+belong to the section. The returned range still uses the normal NFC offsets and
+half-open slicing invariant.
+
+This behavior is deliberately bounded: one call considers at most two explicit
+heading sections (and never more than `max_spans`), and each retained section
+is capped at `min(max_span_chars, 1200)` Unicode codepoints. These deterministic
+caps prevent a relevant heading from flooding context on a very large page.
+Documents without a query-matching Markdown heading retain the ordinary passage
+selection behavior.
+
+The bounded heading interaction was independently implemented for WSP, inspired
+by [Hound/Master-Fetch v11.2.0](https://github.com/dondai1234/master-fetch), an
+independent MIT project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234).
+This is respectful upstream collaboration and attribution, not a code transfer:
+WSP does not import, fork, or copy Hound/Master-Fetch implementation code.
+
 ## Ranker seam
 
 `span_extraction_v3.select_spans` accepts an optional `ranker` callable. It is
-called as `ranker(candidate_text, normalized_query)` for each mechanically
-segmented candidate and must return a finite numeric score. Omitting it uses
-the standard-library lexical ranker (query term and adjacent-token shingle
-overlap, lexical density, and a mild positional prior). This seam can host a
-future embedding-backed ranker without changing offset construction or result
-selection invariants.
+called as `ranker(candidate_text, normalized_query)` for every mechanically
+segmented candidate and any bounded heading-section candidate, and must return
+a finite numeric score. Omitting it uses the standard-library lexical ranker
+(query term and adjacent-token shingle overlap, lexical density, and a mild
+positional prior). This seam can host a future embedding-backed ranker without
+changing offset construction or result selection invariants.
 
 Operator receipts and Operator Console payloads never include span text. The
 current receipt projection omits semantic spans entirely; future receipt

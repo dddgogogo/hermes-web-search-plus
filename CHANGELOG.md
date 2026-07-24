@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### ✨ Added
+- Bounded heading-aware semantic spans: a query-relevant ATX Markdown heading now retains its own section, including deeper subheadings and query-free body text, through the next same-or-shallower heading. Selection remains deterministic and offset-safe, with a two-section cap and a hard 1,200-codepoint cap per heading section.
+
+### Credits
+- The independently implemented heading-aware interaction is inspired by [Hound/Master-Fetch v11.2.0](https://github.com/dondai1234/master-fetch), the independent MIT project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234). This recognizes respectful upstream collaboration; WSP does not import, fork, or copy Hound/Master-Fetch code.
+
 ## [v3.2.0] — 2026-07-22
 
 ### ✨ Added
