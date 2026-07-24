@@ -1,7 +1,7 @@
 # Web Search Plus — Hermes Plugin
 
 <p align="center">
-  <img src="docs/assets/web-search-plus-v3-hero.jpg" alt="Web Search Plus: source-only web intelligence for agents with provider-independent search, extraction, routing, and evidence receipts" width="100%">
+  <img src="docs/assets/web-search-plus-v3-hero.jpg" alt="Web Search Plus: better web search and page reading for Hermes agents" width="100%">
 </p>
 
 <p align="center">
@@ -10,38 +10,33 @@
   <img alt="Hermes Plugin" src="https://img.shields.io/badge/Hermes-plugin-a78bfa.svg">
 </p>
 
-**Web Search Plus connects your agent to the web — honest, source-first, no fluff.** It is not a tool that hands you a pre-baked answer: you get the real sources, and you always see how they were found.
-
-**New in 3.3 — better evidence, less waiting:**
-
-- 🧩 **Heading-aware extraction spans** keep the useful body beneath a matching heading instead of returning an isolated keyword sentence.
-- 🧾 **Provenance-safe result enrichment** merges corroborating snippets without losing their observation IDs, then adds explainable `source_type` and `fetch_priority` hints.
-- ⚡ **Quality-quorum Research** harvests providers as they finish and can stop waiting once enough diverse evidence exists, while every preempted provider remains visible.
-
-All sources, zero invented answers.
+**Give your Hermes agent better web search and clean page reading.** Web Search Plus connects several search services behind one simple setup. It returns the original links and pages, can try another service when one fails, and works with just one configured provider.
 
 It adds two Hermes tools:
 
-- `web_search_plus` — routed multi-provider search with quality diagnostics
-- `web_extract_plus` — clean URL extraction through provider backends
+- `web_search_plus` — search the web and return useful sources
+- `web_extract_plus` — read and clean the pages you already have
 
 > Ported from [web-search-plus-plugin](https://github.com/robbyczgw-cla/web-search-plus-plugin) for the [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin API.
 
 Current release: **v3.3.0** — see the [Changelog](CHANGELOG.md) and [3.3 Release Notes](docs/RELEASE_NOTES_V33.md).
 
+### What's new in 3.3
+
+Version 3.3 keeps more useful text when reading pages, combines supporting details more carefully, and can finish broad research sooner when it already has enough good sources. The tools and normal setup stay the same.
+
+For the technical details, see the [3.3 Release Notes](docs/RELEASE_NOTES_V33.md).
+
 ---
 
-## Why 3.x
+## Why use it
 
-The same two tools since 2.x — what changed underneath is how much you can trust and inspect the results:
-
-- **Sources, not answers.** Every result is a real source with typed provenance; the engine never composes an answer for you.
-- **Honest execution.** Receipts show which providers ran, failed, fell back, or served from cache — nothing fails silently.
-- **Long pages without context floods.** Extraction returns a bounded preview and keeps the full cleaned text available on demand.
-- **A second routing opinion, safely.** An opt-in shadow policy records what it *would* have chosen — it never changes what runs.
-- **Spend control before spending.** Opt-in budget preflight checks call caps, daily quota, and context budgets before the first provider call.
-- **Quality you can measure.** Reports score domain, URL, and content diversity, so ten copies of the same SEO page stop counting as ten sources.
-- **Runs with zero paid keys** if you want: the opt-in self-hosted profile uses SearXNG plus Keenable's public tier, while the optional Hound integration provides local keyless search and extraction over MCP.
+- **One setup, many search services.** Pick one provider to start and add more only when you need them.
+- **Real sources.** Results point back to the pages they came from instead of hiding the web behind a generated answer.
+- **Fewer dead ends.** If one service is unavailable or returns nothing, Web Search Plus can try another.
+- **Search and page reading together.** Find useful pages, then turn them into clean text for your agent.
+- **Optional details when you need them.** Quality reports show which service worked and what happened along the way.
+- **Local options are available.** SearXNG, Keenable and the optional Hound connection can reduce your dependence on paid APIs.
 
 Everything new since 3.0 is additive or opt-in; defaults stay stable across upgrades. Full details: [3.3 Release Notes](docs/RELEASE_NOTES_V33.md) · [3.2 Release Notes](docs/RELEASE_NOTES_V32.md) · [3.1 Release Notes](docs/RELEASE_NOTES_V31.md) · [3.0 Release Notes](docs/RELEASE_NOTES_V3.md).
 
@@ -94,7 +89,7 @@ It selects the derived `self_hosted` profile: automatic search uses only your Se
 
 ### Local Hound provider
 
-[Hound](https://github.com/dondai1234/master-fetch), created by [Bishesh Bhandari](https://github.com/dondai1234), is an independent MIT-licensed MCP server for local keyless search and browser-backed extraction. WSP 3.2 connects to a separately installed Hound sidecar on loopback; it does not bundle or fork Hound. Hound is explicit-only by default, so installing it does not change automatic routing or fallback.
+[Hound](https://github.com/dondai1234/master-fetch), created by [Bishesh Bhandari](https://github.com/dondai1234), is an independent MIT-licensed MCP server for local keyless search and browser-backed extraction. WSP 3.3 connects to a separately installed Hound sidecar on loopback; it does not bundle or fork Hound. Hound is explicit-only by default, so installing it does not change automatic routing or fallback.
 
 Keyless means no commercial API key or per-request provider bill — not offline, anonymous, or cost-free. Public engines and target sites still receive requests from your IP, browser mode consumes local resources, and reliability has no hosted-service SLA. See the [Hound provider guide](docs/HOUND.md) for installation, security boundaries, verification, and the full pros/cons.
 

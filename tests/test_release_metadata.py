@@ -67,3 +67,20 @@ def test_v33_release_surfaces_preserve_upstream_attribution():
     assert "Bishesh Bhandari" in combined
     assert "MIT-licensed" in combined or "MIT project" in combined
     assert "https://github.com/dondai1234/hound" not in combined
+
+
+def test_readme_intro_uses_plain_product_language():
+    readme = (ROOT / "README.md").read_text()
+    intro = readme.split("## Quick Start", 1)[0].lower()
+
+    for implementation_term in (
+        "heading-aware",
+        "provenance-safe",
+        "quality-quorum",
+        "observation id",
+        "fetch_priority",
+    ):
+        assert implementation_term not in intro
+
+    assert "better web search and clean page reading" in intro
+    assert "## why use it" in intro
