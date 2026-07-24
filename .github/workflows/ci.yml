@@ -37,7 +37,7 @@ jobs:
           pip install -r requirements-dev.txt
           npm ci --ignore-scripts
       - name: Ruff
-        run: ruff check .
+        run: ruff check --config ruff.toml .
       - name: Tests
         run: python -m pytest tests/ -q
       - name: Generated artifacts

@@ -44,6 +44,16 @@ def test_runtime_requirements_stay_stdlib_only():
     assert (ROOT / "requirements.txt").read_text().strip() == ""
 
 
+def test_ci_ruff_policy_is_repo_local_and_pinned():
+    policy = (ROOT / "ruff.toml").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    requirements = (ROOT / "requirements-dev.txt").read_text()
+
+    assert 'select = ["E4", "E7", "E9", "F"]' in policy
+    assert "ruff check --config ruff.toml ." in workflow
+    assert "ruff==0.15.12" in requirements
+
+
 def test_v33_release_surfaces_preserve_upstream_attribution():
     readme = (ROOT / "README.md").read_text()
     changelog = (ROOT / "CHANGELOG.md").read_text()
