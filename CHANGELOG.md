@@ -11,6 +11,10 @@
 - Added provider-neutral heuristic `source_type` (`value`, `method`, `method_version`, `confidence`) plus explainable per-result `fetch_priority` tiers with closed reason codes derived from cluster consensus, rank, and source-type authority. These fields are structured hints, not truth or quality claims.
 - Aligned Hound search with extraction by preserving Hound's `source_type` signal for WSP's normalized heuristic projection; `fetch_relevance` and `engines_consensus` remain available as adapter evidence.
 
+### 🐛 Fixed
+- Explicit `--research-providers` now bypass the automatic-routing allowlist, matching explicit single-provider semantics while still honoring disabled, unconfigured, and cooldown safety gates. Cooldown omissions remain visible in both routing and quality receipts instead of silently disappearing.
+- Research quorum evidence now scans all unique candidates from completed providers instead of stopping after the first provider fills the public result target. Later providers can therefore satisfy the provider-diversity requirement while the returned result page remains capped normally.
+
 ### Credits
 - The independently implemented heading-aware interaction is inspired by [Hound/Master-Fetch v11.2.0](https://github.com/dondai1234/master-fetch), the independent MIT project by [Bishesh Bhandari (`dondai1234`)](https://github.com/dondai1234). This recognizes respectful upstream collaboration; WSP does not import, fork, or copy Hound/Master-Fetch code.
 - Hound/Master-Fetch is an independent MIT project by Bishesh Bhandari ([`dondai1234`](https://github.com/dondai1234)), https://github.com/dondai1234/master-fetch. WSP ports and adapts the integration idea through its own adapter; this is not Robby's Hound code and does not bundle, fork, or claim ownership of Hound.
