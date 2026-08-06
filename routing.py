@@ -232,13 +232,13 @@ ROUTING_CLASS_PROVIDER_BOOSTS: Dict[str, List[Tuple[str, float]]] = {
     "shopping_at": [("serper", 8.0), ("firecrawl", 6.0), ("linkup", 4.0), ("you", 2.0), ("exa", -2.0)],
     "local_at": [("firecrawl", 8.0), ("serper", 6.0), ("linkup", 4.0), ("you", 2.0)],
     "official_vendor_release": [("you", 14.0), ("linkup", 10.0), ("exa", 7.0), ("serper", 4.0), ("firecrawl", 3.0)],
-    "official_docs": [("exa", 12.0), ("you", 7.0), ("firecrawl", 5.0), ("serper", 3.0), ("tavily", 2.0)],
+    "official_docs": [("hound", 13.0), ("exa", 12.0), ("you", 7.0), ("firecrawl", 5.0), ("serper", 3.0), ("tavily", 2.0)],
     "policy_pdf": [("linkup", 10.0), ("exa", 8.0), ("serper", 7.0), ("firecrawl", 6.0), ("you", 4.0)],
     "official_regulatory": [("exa", 8.0), ("firecrawl", 6.0), ("serper", 5.0), ("you", 3.0)],
     "sports_current": [("you", 8.0), ("serper", 6.0), ("linkup", 5.0), ("tavily", 2.0)],
-    "github_docs": [("exa", 10.0), ("you", 6.0), ("firecrawl", 5.0), ("serper", 4.0)],
-    "docs_api": [("serper", 6.0), ("exa", 5.0), ("you", 4.0), ("firecrawl", 3.0), ("tavily", 3.0)],
-    "academic_arxiv": [("exa", 12.0), ("serper", 3.0), ("linkup", 2.0), ("you", 1.5)],
+    "github_docs": [("hound", 11.0), ("exa", 10.0), ("you", 6.0), ("firecrawl", 5.0), ("serper", 4.0)],
+    "docs_api": [("hound", 10.0), ("serper", 6.0), ("exa", 5.0), ("you", 4.0), ("firecrawl", 3.0), ("tavily", 3.0)],
+    "academic_arxiv": [("hound", 13.0), ("exa", 12.0), ("serper", 3.0), ("linkup", 2.0), ("you", 1.5)],
     "oss_discovery": [("exa", 8.0), ("firecrawl", 5.0), ("tavily", 4.0), ("you", 3.0)],
     "reddit_community": [("serper", 10.0), ("firecrawl", 8.0), ("tavily", 6.0), ("exa", -20.0)],
     "security_advisory": [("serper", 10.0), ("exa", 8.0), ("linkup", 5.0), ("you", 2.0), ("firecrawl", -20.0)],
@@ -1005,6 +1005,11 @@ class QueryAnalyzer:
             "you": rag_score + (recency_score * 0.25),  # You.com good for real-time + RAG
             "searxng": privacy_score,  # SearXNG for privacy/multi-source queries
             "firecrawl": discovery_score + (research_score * 0.35) + (recency_score * 0.25),
+            # Hound: local keyless metasearch — general-purpose default. Base
+            # score slightly above firecrawl/tavily so local-first wins on
+            # generic queries; specialized intents still pick cloud providers
+            # via their class boosts.
+            "hound": research_score + (0.2 * recency_score) + 0.6,
         }
         if self.config.get("profile") == "self_hosted":
             # Keenable participates only in the profile that owns this
@@ -1033,6 +1038,7 @@ class QueryAnalyzer:
             "you": rag_matches,
             "searxng": privacy_matches,
             "firecrawl": discovery_matches + research_matches,
+            "hound": research_matches,
         }
         if self.config.get("profile") == "self_hosted":
             provider_matches["keenable"] = rag_matches + research_matches
