@@ -122,7 +122,7 @@ DEFAULT_ROUTING_CLASS = "general"
 # You performed best as the safe fast default, with Exa/Firecrawl/Linkup
 # useful by script. Kept modest so strong class rules win.
 LANGUAGE_HINT_PROVIDER_BOOSTS: Dict[str, List[Tuple[str, float]]] = {
-    "zh": [("exa", 7.0), ("you", 6.0), ("firecrawl", 4.0), ("linkup", 3.0), ("serper", 2.5)],
+    "zh": [("hound", 10.0), ("exa", 7.0), ("you", 6.0), ("firecrawl", 4.0), ("linkup", 3.0), ("serper", 2.5)],
     "ar": [("you", 8.0), ("linkup", 5.0), ("serper", 4.0), ("firecrawl", 2.0)],
     "default": [("you", 8.0), ("exa", 5.0), ("firecrawl", 4.0), ("linkup", 3.0), ("tavily", 2.0)],
 }
