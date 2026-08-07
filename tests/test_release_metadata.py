@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "3.4.1"
+EXPECTED_VERSION = "3.4.2"
 
 
 def _load_plugin_module():
@@ -61,8 +61,8 @@ def test_current_release_surfaces_and_attribution():
     user_guide = (ROOT / "docs/USER_GUIDE.md").read_text()
     combined = "\n".join((readme, changelog, release_notes, user_guide))
 
-    assert "Current release: **v3.4.1**" in readme
-    assert "docs/RELEASE_NOTES_V341.md" in readme
+    assert "Current release: **v3.4.2**" in readme
+    assert "docs/RELEASE_NOTES_V342.md" in readme
     assert "Exa" in release_notes
     assert "TinyFish" in release_notes
     assert "explicit-only" in release_notes

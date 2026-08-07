@@ -19,13 +19,13 @@ It adds two Hermes tools:
 
 > Ported from [web-search-plus-plugin](https://github.com/robbyczgw-cla/web-search-plus-plugin) for the [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin API.
 
-Current release: **v3.4.1** — see the [Changelog](CHANGELOG.md) and [3.4.1 Release Notes](docs/RELEASE_NOTES_V341.md).
+Current release: **v3.4.2** — see the [Changelog](CHANGELOG.md) and [3.4.2 Release Notes](docs/RELEASE_NOTES_V342.md).
 
-### What's new in 3.4.1
+### What's new in 3.4.2
 
-Version 3.4.1 adds native Exa freshness bounds and an optional TinyFish source-search provider. TinyFish is BYOK, off by default, and runs only when explicitly selected; review its High Risk data-use terms before sending queries. Existing tools, provider settings, and automatic routing stay the same.
+Long Research source summaries now identify their 500-character preview boundary and report the exact original length, so a shortened display cannot be mistaken for complete source content. Existing tools, provider settings, and automatic routing stay the same.
 
-For technical details, see the [Changelog](CHANGELOG.md), [provider guide](docs/PROVIDERS.md), and [3.4.1 Release Notes](docs/RELEASE_NOTES_V341.md).
+For technical details, see the [Changelog](CHANGELOG.md), [provider guide](docs/PROVIDERS.md), and [3.4.2 Release Notes](docs/RELEASE_NOTES_V342.md).
 
 ---
 
