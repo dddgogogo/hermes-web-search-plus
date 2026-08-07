@@ -455,7 +455,13 @@ class QueryAnalyzer:
 
         # URL detection (very strong signal for Exa similar)
         r'https?://[^\s]+': 5.0,
-        r'\b\w+\.(com|org|io|ai|co|dev)\b': 3.5,
+        # NOTE: bare-domain pattern (r'\b\w+\.(com|org|io|ai|co|dev)\b') was
+        # removed: it double-counted domains already handled by _detect_url
+        # (+5.0 url_detected) and misclassified plain domain mentions
+        # (e.g. "mem.nowledge.co docs ...") as discovery intent, which
+        # inflated firecrawl/exa and starved hound on generic queries.
+        # Discovery intent with domains is still covered by the
+        # "like <domain>.com" pattern above plus url_detected.
     }
 
     LOCAL_NEWS_SIGNALS = {
@@ -789,11 +795,20 @@ class QueryAnalyzer:
         if match:
             return match.group()
 
-        # Also check for domain-like patterns
-        domain_pattern = r'\b(\w+\.(com|org|io|ai|co|dev|net|app))\b'
+        # Bare-domain mentions only count as discovery intent when the query
+        # asks for similar/alternative things (e.g. "like notion.com").
+        # A plain domain mention ("mem.nowledge.co docs ...") is navigation or
+        # docs intent, not discovery — counting it inflated firecrawl/exa
+        # scores via discovery and starved hound (no discovery component) on
+        # otherwise generic queries.
+        domain_pattern = (
+            r'\b(?:like|similar to|alternatives? to|vs\.?|competitors? (?:of|to)|'
+            r'rivals? (?:of|to)|instead of|replacement for)\s+'
+            r'([\w-]+(?:\.[\w-]+)*\.(?:com|org|io|ai|co|dev|net|app))\b'
+        )
         match = re.search(domain_pattern, query, re.IGNORECASE)
         if match:
-            return match.group()
+            return match.group(1)
 
         return None
 
