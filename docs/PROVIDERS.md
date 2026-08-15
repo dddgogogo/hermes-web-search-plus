@@ -24,6 +24,7 @@ and the plugin provider catalog; regenerate it with `python scripts/gen_provider
 | SearXNG | ✅ | — | `SEARXNG_INSTANCE_URL` | — | yes (priority 11) | Free if self-hosted | https://docs.searxng.org/admin/installation.html |
 | Keenable | ✅ | ✅ | `KEENABLE_API_KEY` | yes (`KEENABLE_ALLOW_PUBLIC` opt-in) | yes (priority 12) | Keyless public tier; optional key for higher limits | https://keenable.ai |
 | DonSeTch (local MCP) | ✅ | ✅ | `DONSETCH_BIN` | — | explicit-only (`auto_allow=false`) | Free local binary; no API key | https://github.com/dondai44423/donsetch |
+| Hound (local MCP) | ✅ | ✅ | `HOUND_MCP_URL` | yes (`HOUND_ALLOW_PUBLIC` opt-in) | explicit-only (`auto_allow=false`) | Free local sidecar; no API key | https://github.com/dondai1234/master-fetch |
 | Octen via Monid | ✅ | — | `MONID_API_KEY` | — | explicit-only (`auto_allow=false`) | No free-tier claim; Monid API key and wallet balance required | https://app.monid.ai/access/api-keys |
 | TinyFish Search | ✅ | — | `TINYFISH_API_KEY` | — | explicit-only (`auto_allow=false`) | Search does not consume credits; API access required (30 rpm Free/PAYG) | https://agent.tinyfish.ai/api-keys |
 

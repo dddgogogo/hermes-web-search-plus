@@ -163,7 +163,7 @@ Forum and community discussion queries (Head-Fi, AudioScienceReview, hifi-forum,
 Academic discovery: arXiv, papers, randomized trials, primary sources.
 
 - **Example signals:** `arxiv`, `paper(s)?`, `scaling laws`, `randomi[sz]ed trial`, `primary sources?`
-- **Preferred providers:** `exa` (+12), `serper` (+3), `linkup` (+2), `you` (+1.5)
+- **Preferred providers:** `hound` (+13), `exa` (+12), `serper` (+3), `linkup` (+2), `you` (+1.5)
 - **Demoted providers:** none
 
 ### `github_docs`
@@ -171,7 +171,7 @@ Academic discovery: arXiv, papers, randomized trials, primary sources.
 GitHub repositories and plugin documentation lookups.
 
 - **Example signals:** `github`, `repo(sitory)?`, `plugin docs`
-- **Preferred providers:** `exa` (+10), `you` (+6), `firecrawl` (+5), `serper` (+4)
+- **Preferred providers:** `hound` (+11), `exa` (+10), `you` (+6), `firecrawl` (+5), `serper` (+4)
 - **Demoted providers:** none
 
 ### `official_docs`
@@ -179,7 +179,7 @@ GitHub repositories and plugin documentation lookups.
 Official documentation, API references, and developer docs.
 
 - **Example signals:** `official docs?`, `official documentation`, `api reference`, `developer docs?`, `official manual`
-- **Preferred providers:** `exa` (+12), `you` (+7), `firecrawl` (+5), `serper` (+3), `tavily` (+2)
+- **Preferred providers:** `hound` (+13), `exa` (+12), `you` (+7), `firecrawl` (+5), `serper` (+3), `tavily` (+2)
 - **Demoted providers:** none
 - **Boost domains:** `docs.`, `developer.`, `github.com`, `readthedocs.io`, `modelcontextprotocol.io`
 - **Demote domains:** `medium.com`, `dev.to`, `reddit.com`, `stackoverflow.com`, `youtube.com`
@@ -199,7 +199,7 @@ Official releases and announcements from major AI/tech vendors (Mistral, Anthrop
 Package and API documentation, changelogs, and release notes (Python, Pydantic, Node.js, ...).
 
 - **Example signals:** `python`, `pydantic`, `node\.js`, `api docs?`, `documentation`
-- **Preferred providers:** `serper` (+6), `exa` (+5), `you` (+4), `firecrawl` (+3), `tavily` (+3)
+- **Preferred providers:** `hound` (+10), `serper` (+6), `exa` (+5), `you` (+4), `firecrawl` (+3), `tavily` (+3)
 - **Demoted providers:** none
 
 ### `local_at`
@@ -241,7 +241,7 @@ Fallback for queries in languages other than English/German; provider boosts dep
 - **Example signals:** assigned when the language/script hint is neither `en` nor `de`.
 - **Preferred providers (`ar`):** `you` (+8), `linkup` (+5), `serper` (+4), `firecrawl` (+2)
 - **Preferred providers (other scripts):** `you` (+8), `exa` (+5), `firecrawl` (+4), `linkup` (+3), `tavily` (+2)
-- **Preferred providers (`zh`):** `exa` (+7), `you` (+6), `firecrawl` (+4), `linkup` (+3), `serper` (+2.5)
+- **Preferred providers (`zh`):** `hound` (+10), `exa` (+7), `you` (+6), `firecrawl` (+4), `linkup` (+3), `serper` (+2.5)
 - `you` additionally gains up to +3 from the recency score.
 
 ### `general`
