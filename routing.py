@@ -1024,7 +1024,7 @@ class QueryAnalyzer:
             # score slightly above firecrawl/tavily so local-first wins on
             # generic queries; specialized intents still pick cloud providers
             # via their class boosts.
-            "hound": research_score + (0.2 * recency_score) + 0.6,
+            "hound": research_score + (0.2 * recency_score) + direct_answer_score * 0.7 + 0.6,
         }
         if self.config.get("profile") == "self_hosted":
             # Keenable participates only in the profile that owns this
