@@ -1993,8 +1993,8 @@ def register(ctx: Any) -> None:
                 },
                 "timeout": {
                     "type": "integer",
-                    "default": 30,
-                    "description": "Wall-clock timeout in seconds before giving up (default 30; 超时即弃, swap source)",
+                    "default": 12,
+                    "description": "Wall-clock timeout in seconds before giving up (default 12; 超时即弃, swap source)",
                 },
             },
             "required": ["urls"],
@@ -2004,7 +2004,7 @@ def register(ctx: Any) -> None:
     def extract_handler(args_or_urls, provider: str = "auto", format: str = "markdown",
                         include_images: bool = False, include_raw_html: bool = False,
                         render_js: bool = False, spans: bool = False,
-                        spans_query: Optional[str] = None, timeout: int = 30, **kwargs) -> str:
+                        spans_query: Optional[str] = None, timeout: int = 12, **kwargs) -> str:
         if isinstance(args_or_urls, dict):
             urls = args_or_urls.get("urls", [])
             provider = args_or_urls.get("provider", provider)
