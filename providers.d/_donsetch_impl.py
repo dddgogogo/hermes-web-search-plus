@@ -107,7 +107,7 @@ def _url_allowed_by_domains(
 
 
 def _candidate_binary(key: str | None, config: dict[str, Any]) -> str:
-    section = config.get("donsetch", {}) if isinstance(config, dict) else {}
+    section = config.get("local", {}) if isinstance(config, dict) else {}
     if not isinstance(section, dict):
         section = {}
     candidate = key or section.get("binary") or section.get("api_key")
@@ -451,7 +451,7 @@ def _search_intent(args: Any) -> str:
 
 def execute_search(search_module, prov, args, key, config, routing_info):
     binary = _resolve_binary(key, config)
-    section = config.get("donsetch", {}) if isinstance(config, dict) else {}
+    section = config.get("local", {}) if isinstance(config, dict) else {}
     if not isinstance(section, dict):
         section = {}
     timeout_seconds = _bounded_int(section.get("timeout"), 180, 5, 600)
@@ -496,7 +496,7 @@ def execute_search(search_module, prov, args, key, config, routing_info):
                 snippet=str(item.get("snippet") or ""),
                 score=_safe_float(item.get("score")),
                 position=position,
-                source="donsetch",
+                source="local",
                 engines=engines,
                 engines_consensus=str(item.get("consensus") or ""),
                 source_type="web",
@@ -524,7 +524,7 @@ def execute_search(search_module, prov, args, key, config, routing_info):
         "cached": bool(structured.get("cached")),
         "weak": bool(structured.get("weak")),
         "duration_ms": _safe_float(structured.get("elapsed_ms")),
-        "provider": "donsetch",
+        "provider": "local",
     }
     return search_result(
         prov,
@@ -555,7 +555,7 @@ def _project_fetch_item(payload: dict[str, Any], fallback_url: str) -> dict[str,
         content=content,
         images=[],
         status=status,
-        fetcher="donsetch",
+        fetcher="local",
         page_type=str(structured.get("content_kind") or ""),
         source_type="web",
         quality=_safe_float(structured.get("quality")),
@@ -581,7 +581,7 @@ def execute_extract(
     if str(output_format or "markdown") not in _ALLOWED_OUTPUT_FORMATS:
         raise RuntimeError("donsetch_output_format_unsupported")
     binary = _resolve_binary(key, config)
-    section = config.get("donsetch", {}) if isinstance(config, dict) else {}
+    section = config.get("local", {}) if isinstance(config, dict) else {}
     if not isinstance(section, dict):
         section = {}
     timeout_seconds = _bounded_int(section.get("timeout"), 180, 5, 600)
@@ -625,7 +625,7 @@ def execute_extract(
 
 
 PROVIDER = ProviderSpec(
-    id="donsetch",
+    id="local",
     kind="both",
     env_var="DONSETCH_BIN",
     display_name="DonSeTch (local MCP)",
@@ -633,7 +633,7 @@ PROVIDER = ProviderSpec(
         "Local DonSeTch 2.x stdio MCP provider for metasearch, direct extraction, "
         "PDF/OCR-aware fetching, and optional browser escalation."
     ),
-    config_section="donsetch",
+    config_section="local",
     capability_labels=("search", "extract", "local", "pdf", "ocr", "browser"),
     upstream_capabilities=("web_search", "web_fetch", "web_crawl"),
     auto_allowed_by_default=False,

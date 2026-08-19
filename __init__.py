@@ -684,12 +684,12 @@ def _profile_status(config: Mapping[str, Any], env: Mapping[str, str]) -> Dict[s
     }
 
 
-def _donsetch_status(env: Mapping[str, str], config: Mapping[str, Any]) -> Dict[str, Any]:
-    """DonSeTch readiness is a binary path, not an API key."""
+def _local_status(env: Mapping[str, str], config: Mapping[str, Any]) -> Dict[str, Any]:
+    """Local provider readiness (search-kata stack) is a binary path, not an API key."""
     try:
-        spec = PROVIDER_SPECS.get("donsetch")
+        spec = PROVIDER_SPECS.get("local")
         inspect = getattr(getattr(spec, "execute_search", None), "__globals__", {}).get(
-            "inspect_donsetch_readiness"
+            "inspect_local_readiness"
         )
     except Exception:
         inspect = None
@@ -697,7 +697,7 @@ def _donsetch_status(env: Mapping[str, str], config: Mapping[str, Any]) -> Dict[
         return {
             "state": "missing",
             "version": None,
-            "tested_version": "2.3.1",
+            "tested_version": "2.3.4",
             "compatibility": "unknown",
             "binary_configured": bool(_clean_env_value(env.get("DONSETCH_BIN") or "")),
         }
@@ -711,7 +711,7 @@ def _status_payload(env: Optional[Mapping[str, str]] = None, config: Optional[Ma
         "providers": _provider_config_status(active_env),
         "profile": _profile_status(active_config, active_env),
         "routing": active_config,
-        "donsetch": _donsetch_status(active_env, active_config),
+        "local": _local_status(active_env, active_config),
     }
 
 
@@ -1177,14 +1177,14 @@ def _web_search_plus_cli_command(args: Any) -> None:
         else:
             print(_render_setup_guidance(env=env, fancy=not getattr(args, "plain", False)))
             print("\n" + _routing_summary(config))
-            donsetch = payload.get("donsetch") or {}
-            if donsetch.get("binary_configured") or donsetch.get("state") != "missing":
+            local = payload.get("local") or {}
+            if local.get("binary_configured") or local.get("state") != "missing":
                 print(
-                    "\nDonSeTch binary: "
-                    f"state={donsetch.get('state')}, "
-                    f"version={donsetch.get('version') or 'unknown'}, "
-                    f"compatibility={donsetch.get('compatibility')}, "
-                    f"tested={donsetch.get('tested_version')}"
+                    "\nLocal provider: "
+                    f"state={local.get('state')}, "
+                    f"version={local.get('version') or 'unknown'}, "
+                    f"compatibility={local.get('compatibility')}, "
+                    f"tested={local.get('tested_version')}"
                 )
             if payload["profile"]["active"] == "self_hosted":
                 print("\n" + _render_profile_checks(payload["profile"]))
