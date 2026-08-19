@@ -122,7 +122,7 @@ DEFAULT_ROUTING_CLASS = "general"
 # You performed best as the safe fast default, with Exa/Firecrawl/Linkup
 # useful by script. Kept modest so strong class rules win.
 LANGUAGE_HINT_PROVIDER_BOOSTS: Dict[str, List[Tuple[str, float]]] = {
-    "zh": [("donsetch", 10.0), ("hound", 9.0), ("exa", 7.0), ("you", 6.0), ("firecrawl", 4.0), ("linkup", 3.0), ("serper", 2.5)],
+    "zh": [("donsetch", 10.0), ("exa", 7.0), ("you", 6.0), ("firecrawl", 4.0), ("linkup", 3.0), ("serper", 2.5)],
     "ar": [("you", 8.0), ("linkup", 5.0), ("serper", 4.0), ("firecrawl", 2.0)],
     "default": [("you", 8.0), ("exa", 5.0), ("firecrawl", 4.0), ("linkup", 3.0), ("tavily", 2.0)],
 }
@@ -232,13 +232,13 @@ ROUTING_CLASS_PROVIDER_BOOSTS: Dict[str, List[Tuple[str, float]]] = {
     "shopping_at": [("serper", 8.0), ("firecrawl", 6.0), ("linkup", 4.0), ("you", 2.0), ("exa", -2.0)],
     "local_at": [("firecrawl", 8.0), ("serper", 6.0), ("linkup", 4.0), ("you", 2.0)],
     "official_vendor_release": [("you", 14.0), ("linkup", 10.0), ("exa", 7.0), ("serper", 4.0), ("firecrawl", 3.0)],
-    "official_docs": [("donsetch", 13.0), ("hound", 12.0), ("exa", 12.0), ("you", 7.0), ("firecrawl", 5.0), ("serper", 3.0), ("tavily", 2.0)],
+    "official_docs": [("donsetch", 13.0), ("exa", 12.0), ("you", 7.0), ("firecrawl", 5.0), ("serper", 3.0), ("tavily", 2.0)],
     "policy_pdf": [("linkup", 10.0), ("exa", 8.0), ("serper", 7.0), ("firecrawl", 6.0), ("you", 4.0)],
     "official_regulatory": [("exa", 8.0), ("firecrawl", 6.0), ("serper", 5.0), ("you", 3.0)],
     "sports_current": [("you", 8.0), ("serper", 6.0), ("linkup", 5.0), ("tavily", 2.0)],
-    "github_docs": [("donsetch", 11.0), ("hound", 10.0), ("exa", 10.0), ("you", 6.0), ("firecrawl", 5.0), ("serper", 4.0)],
-    "docs_api": [("donsetch", 10.0), ("hound", 9.0), ("serper", 6.0), ("exa", 5.0), ("you", 4.0), ("firecrawl", 3.0), ("tavily", 3.0)],
-    "academic_arxiv": [("donsetch", 13.0), ("hound", 12.0), ("exa", 12.0), ("serper", 3.0), ("linkup", 2.0), ("you", 1.5)],
+    "github_docs": [("donsetch", 11.0), ("exa", 10.0), ("you", 6.0), ("firecrawl", 5.0), ("serper", 4.0)],
+    "docs_api": [("donsetch", 10.0), ("serper", 6.0), ("exa", 5.0), ("you", 4.0), ("firecrawl", 3.0), ("tavily", 3.0)],
+    "academic_arxiv": [("donsetch", 13.0), ("exa", 12.0), ("serper", 3.0), ("linkup", 2.0), ("you", 1.5)],
     "oss_discovery": [("exa", 8.0), ("firecrawl", 5.0), ("tavily", 4.0), ("you", 3.0)],
     "reddit_community": [("serper", 10.0), ("firecrawl", 8.0), ("tavily", 6.0), ("exa", -20.0)],
     "security_advisory": [("serper", 10.0), ("exa", 8.0), ("linkup", 5.0), ("you", 2.0), ("firecrawl", -20.0)],
@@ -1025,10 +1025,6 @@ class QueryAnalyzer:
             # firecrawl/tavily so local-first wins on generic queries;
             # specialized intents still pick cloud providers via class boosts.
             "donsetch": research_score + (0.2 * recency_score) + direct_answer_score * 0.7 + 0.6,
-            # Hound: legacy local keyless metasearch — kept as local fallback.
-            # Slightly lower base so donsetch wins generic ties; hound still
-            # participates in boosted classes and the fallback chain.
-            "hound": research_score + (0.2 * recency_score) + direct_answer_score * 0.7 + 0.2,
         }
         if self.config.get("profile") == "self_hosted":
             # Keenable participates only in the profile that owns this
@@ -1057,7 +1053,6 @@ class QueryAnalyzer:
             "you": rag_matches,
             "searxng": privacy_matches,
             "firecrawl": discovery_matches + research_matches,
-            "hound": research_matches,
             "donsetch": research_matches,
         }
         if self.config.get("profile") == "self_hosted":
