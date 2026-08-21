@@ -542,10 +542,16 @@ def _project_fetch_item(payload: dict[str, Any], fallback_url: str) -> dict[str,
     url = observed_url if isinstance(observed_url, str) and observed_url else fallback_url
     status = _safe_int(structured.get("status"))
     content = str(payload.get("text") or "")
+    # Failure oracle: DonSeTch's own verdict + content_ok + non-empty content.
+    # HTTP status alone is NOT a failure signal — the browser-render path can
+    # succeed with a 403 from a later cookie-retry step (e.g. Cloudflare edge),
+    # and DonSeTch already maps real failures (404/500/walls) to verdicts
+    # SoftNotFound/Blocked/Challenge/AuthWall/Paywall with empty content.
+    verdict = structured.get("verdict")
+    failed_verdict = verdict is not None and verdict != "ContentOk"
     if (
         not structured.get("content_ok")
-        or structured.get("verdict") in {"Error", "Blocked", "Failed"}
-        or status >= 400
+        or failed_verdict
         or not content.strip()
     ):
         return {"url": url, "error": "donsetch_fetch_failed", "status": status}
