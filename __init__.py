@@ -1985,7 +1985,7 @@ def register(ctx: Any) -> None:
                 "format": {"type": "string", "enum": ["markdown", "html"], "default": "markdown"},
                 "include_images": {"type": "boolean", "default": False},
                 "include_raw_html": {"type": "boolean", "default": False},
-                "render_js": {"type": "boolean", "default": False},
+                "render_js": {"type": "boolean", "default": False, "description": "Force browser rendering. Usually unnecessary: the local provider automatically retries failed/empty pages with browser rendering once (config local.js_retry), then falls back to cloud providers."},
                 "spans": {"type": "boolean", "default": False},
                 "spans_query": {
                     "type": "string",

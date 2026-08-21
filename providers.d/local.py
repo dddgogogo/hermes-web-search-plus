@@ -184,6 +184,42 @@ def execute_extract(
         except Exception as exc:  # engine failure must not kill the whole call
             errors.append({"provider": "local", "urls": web_urls, "error": str(exc)})
 
+        # JS-shell fallback: when a non-rendered fetch came back failed or
+        # empty, retry those URLs with browser rendering (tier=2) once.
+        # Agents never need to know about render_js — the engine escalates
+        # automatically. Controlled by config local.js_retry (default on).
+        if not render_js:
+            section = config.get("local", {}) if isinstance(config, dict) else {}
+            js_retry = section.get("js_retry", True)
+            if isinstance(js_retry, str):
+                js_retry = js_retry.strip().lower() not in ("0", "false", "no", "off")
+            if js_retry:
+                failed = [
+                    r for r in results
+                    if r.get("error") or not str(r.get("content") or "").strip()
+                ]
+                retry_urls = [r.get("url") for r in failed if r.get("url")]
+                if retry_urls:
+                    try:
+                        resp2 = _run_donsetch_extract(
+                            extract_module, retry_urls, key, output_format,
+                            include_images, include_raw_html, True, config, keyless_allowed,
+                        )
+                        ok2 = {
+                            r.get("url"): r
+                            for r in resp2.get("results", [])
+                            if r.get("url")
+                            and not r.get("error")
+                            and str(r.get("content") or "").strip()
+                        }
+                        if ok2:
+                            for i, r in enumerate(results):
+                                if r.get("url") in ok2:
+                                    results[i] = ok2[r["url"]]
+                        errors.extend(resp2.get("errors", []) or [])
+                    except Exception as exc:
+                        errors.append({"provider": "local", "urls": retry_urls, "error": f"js_retry: {exc}"})
+
     if pdf_urls:
         try:
             resp = _run_hound_pdf_extract(
