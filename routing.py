@@ -1124,14 +1124,21 @@ class QueryAnalyzer:
         # Find the winner
         max_score = max(available.values())
 
-        # Handle ties using deterministic per-query distribution
-        priority = self.auto_config.get("provider_priority", list(DEFAULT_PROVIDER_PRIORITY))
-        winners = [p for p, s in available.items() if s == max_score]
-
-        if len(winners) > 1:
-            winner = _choose_tie_winner(query, winners, priority)
+        # Local-first routing: when the local provider is available it always
+        # wins — intent scoring only decides among cloud providers. Cloud
+        # providers (firecrawl etc.) still receive queries via the execution-
+        # layer fallback chain when local fails or is unconfigured.
+        if "local" in available:
+            winner = "local"
         else:
-            winner = winners[0]
+            # Handle ties using deterministic per-query distribution
+            priority = self.auto_config.get("provider_priority", list(DEFAULT_PROVIDER_PRIORITY))
+            winners = [p for p, s in available.items() if s == max_score]
+
+            if len(winners) > 1:
+                winner = _choose_tie_winner(query, winners, priority)
+            else:
+                winner = winners[0]
 
         # Calculate confidence
         # High confidence = clear winner with good margin
