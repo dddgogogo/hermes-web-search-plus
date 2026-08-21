@@ -238,8 +238,13 @@ def execute_extract(
     }
     if errors:
         payload["errors"] = errors
-    if not results and errors:
-        payload["error"] = errors[0].get("error", "local_extract_failed")
+    # All results failed/empty → surface a payload-level error so the
+    # execution layer falls through to the cloud fallback chain instead of
+    # treating the local attempt as a success with broken items.
+    failed_items = [r for r in results if r.get("error")]
+    if (not results or len(failed_items) == len(results)) and (errors or failed_items):
+        source = (errors[0] if errors else failed_items[0]) or {}
+        payload["error"] = source.get("error", "local_extract_failed")
     return payload
 
 
