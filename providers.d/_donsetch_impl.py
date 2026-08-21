@@ -549,11 +549,12 @@ def _project_fetch_item(payload: dict[str, Any], fallback_url: str) -> dict[str,
     # SoftNotFound/Blocked/Challenge/AuthWall/Paywall with empty content.
     verdict = structured.get("verdict")
     failed_verdict = verdict is not None and verdict != "ContentOk"
-    if (
+    _failed = (
         not structured.get("content_ok")
         or failed_verdict
         or not content.strip()
-    ):
+    )
+    if _failed:
         return {"url": url, "error": "donsetch_fetch_failed", "status": status}
     return source_result(
         url,
@@ -599,9 +600,12 @@ def execute_extract(
         500,
         200000,
     )
-    tier = "2" if render_js else str(section.get("tier") or "auto")
+    # Browser-render by default: tier=2 (direct headless Chromium) is stable
+    # on bot-walled pages where tier=auto's cookie-retry step can surface a
+    # 403 (Cloudflare edge). auto is still available via config local.tier.
+    tier = "2" if render_js else str(section.get("tier") or "2")
     if tier not in {"auto", "1", "2"}:
-        tier = "auto"
+        tier = "2"
 
     projected = []
     try:
