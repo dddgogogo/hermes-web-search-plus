@@ -611,16 +611,33 @@ def execute_extract(
     try:
         with DonsetchSession(binary, timeout_seconds) as session:
             for requested_url in [str(url) for url in urls]:
-                payload = session.call(
-                    "web_fetch",
-                    {
+                try:
+                    payload = session.call(
+                        "web_fetch",
+                        {
+                            "url": requested_url,
+                            "max_chars": max_chars,
+                            "media": bool(include_images),
+                            "tier": tier,
+                        },
+                    )
+                    result = _project_fetch_item(payload, requested_url)
+                except RuntimeError as exc:
+                    # DonSeTch answers single-URL business failures (walled /
+                    # redirect loops / blocked / not-found) with an isError tool
+                    # result, surfaced here as RuntimeError("donsetch_tool_error").
+                    # That is per-URL failure, NOT an engine fault: record the
+                    # item as failed and keep fetching the remaining URLs so one
+                    # bad URL cannot sink the whole batch. Protocol/process
+                    # errors (donsetch_mcp_*, contract, Timeout, BrokenPipe)
+                    # still propagate and fail the provider as before.
+                    if str(exc) != "donsetch_tool_error":
+                        raise
+                    result = {
                         "url": requested_url,
-                        "max_chars": max_chars,
-                        "media": bool(include_images),
-                        "tier": tier,
-                    },
-                )
-                result = _project_fetch_item(payload, requested_url)
+                        "error": "donsetch_fetch_failed",
+                        "status": 0,
+                    }
                 if include_raw_html and not result.get("error"):
                     # DonSeTch deliberately returns Markdown; do not label it HTML.
                     result["raw_error"] = "donsetch_raw_html_unsupported"
