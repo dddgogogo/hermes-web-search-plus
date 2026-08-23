@@ -112,7 +112,10 @@ def execute_search(search_module, prov, args, key, config, routing_info):
 
 
 # ---------------------------------------------------------------------------
-# Extract — PDF to Hound (ODL), everything else to DonSeTch
+# Extract — everything to DonSeTch (2026-08-22: PDF 路由从 Hound ODL 切到
+# DonSeTch DonSheet。实测对比：AcroForm 表单字段识别 + 扫描件 OCR 均强于
+# ODL，文本提取持平；DonSeTch 对 PDF URL 强制走 tier=1 DonSheet 引擎，
+# 不受 local.tier=2 影响。_run_hound_pdf_extract 保留备回滚)
 # ---------------------------------------------------------------------------
 
 def _is_pdf_url(url: str) -> bool:
@@ -222,7 +225,7 @@ def execute_extract(
 
     if pdf_urls:
         try:
-            resp = _run_hound_pdf_extract(
+            resp = _run_donsetch_extract(
                 extract_module, pdf_urls, key, output_format,
                 include_images, include_raw_html, render_js, config, keyless_allowed,
             )
