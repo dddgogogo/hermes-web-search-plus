@@ -19,7 +19,11 @@ def legacy_request_to_v3(
     """Project a public legacy invocation into a complete RequestV3."""
     capability = Capability(capability)
     provider = str(payload.get("provider") or "auto")
-    default_fallback = capability is Capability.EXTRACT or provider == "auto"
+    # Explicit provider requests are strict (no fallback) for both SEARCH and
+    # EXTRACT; only auto-routing keeps the fallback chain. Historical EXTRACT
+    # defaulted to fallback even with an explicit provider — that inconsistency
+    # silently routed local-only requests to paid providers (e.g. firecrawl).
+    default_fallback = provider == "auto"
     routing = {
         "mode": "auto" if provider == "auto" else "fixed",
         "provider": provider,
